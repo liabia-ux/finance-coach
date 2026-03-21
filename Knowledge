@@ -1,0 +1,73 @@
+# IRS Publication 590-A: Individual Retirement Arrangements (IRAs)
+**Effective Date:** Tax Year 2026
+
+## 1. Contribution Limits
+The maximum amount you can contribute to all your traditional and Roth IRAs is the smaller of:
+- Your taxable compensation for the year, or
+- **$7,500** (Standard Limit)
+- **$8,600** (Catch-up limit for age 50 or older)
+
+## 2. Roth IRA Income Phase-outs
+Your ability to contribute to a Roth IRA depends on your Modified Adjusted Gross Income (MAGI).
+- **Single Filers:** Contributions begin to phase out at $138,000 and are fully ineligible above **$153,000**.
+- **Married Filing Jointly:** Phase-out range is $230,000 – $240,000.
+
+## 3. Early Withdrawal Penalties
+Generally, a 10% additional tax applies to distributions taken before age 59½, unless an exception (first-time homebuyer, education, etc.) applies.
+
+
+# Consumer Financial Protection Bureau (CFPB) Guidelines
+
+## 1. Regulation Z (Truth in Lending Act)
+Lenders are legally required to provide standardized disclosures to consumers regarding:
+- **Annual Percentage Rate (APR):** The total cost of credit as a yearly rate.
+- **Finance Charges:** The dollar amount the credit will cost you.
+- **Total of Payments:** The amount you will have paid after you have made all scheduled payments.
+
+## 2. Fair Credit Reporting Act (FCRA) - 2026 Limits
+- **File Disclosure Fee:** As of January 1, 2026, the maximum charge to a consumer for a file disclosure is **$16.00**.
+- **Dispute Rights:** Consumers have the right to dispute inaccurate information on their credit report; credit bureaus must investigate within 30 days.
+
+
+# Market Indicators/Economic Status
+
+{
+  "as_of_date": "2026-03-20",
+  "interest_rates": {
+    "federal_funds_rate": "3.50% - 3.75%",
+    "source": "Federal Reserve Economic Data (FRED)",
+    "trend": "Holding Steady"
+  },
+  "inflation_metrics": {
+    "cpi_current": "3.1%",
+    "pce_projection_2026": "2.4%",
+    "target_rate": "2.0%"
+  },
+  "economic_outlook": "Moderate growth with stabilizing core inflation."
+}
+
+# Core Budgeting Frameworks and Logic
+
+## 1. The 50/30/20 Rule
+A foundational method for dividing after-tax (net) income:
+- **50% Needs:** Mandatory expenses (Housing, Utilities, Minimum Debt, Groceries).
+- **30% Wants:** Discretionary spending (Dining, Entertainment, Hobbies).
+- **20% Savings/Debt:** Extra debt principal, Emergency Fund, Retirement.
+
+
+
+[Image of 50/30/20 budget pie chart]
+
+
+## 2. Debt Payoff Strategies
+When a user has multiple high-interest debts, use one of these two logics:
+
+### A. Debt Snowball
+- **Logic:** Pay off the smallest balance first, regardless of interest rate.
+- **Goal:** Psychological "wins" to keep the user motivated.
+
+### B. Debt Avalanche
+- **Logic:** Pay off the debt with the highest interest rate first.
+- **Goal:** Mathematically minimize the total interest paid over time.
+
+
