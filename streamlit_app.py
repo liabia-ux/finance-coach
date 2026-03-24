@@ -10,8 +10,8 @@ client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 # -------------------------
 # PAGE SETUP
 # -------------------------
-st.set_page_config(page_title="Finance Coach", page_icon="💸")
-st.title("💸 Finance Coach")
+st.set_page_config(page_title="WalletWise", page_icon="")
+st.title("WalletWise")
 
 # -------------------------
 # SESSION STATE
