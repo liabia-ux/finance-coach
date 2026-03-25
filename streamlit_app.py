@@ -210,6 +210,7 @@ elif typed_prompt:
     prompt = typed_prompt
 
 # ---------------- RESPONSE LOGIC ----------------
+# ---------------- RESPONSE LOGIC ----------------
 if prompt:
     # Show user message
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -219,9 +220,6 @@ if prompt:
 
     # Get assistant response (STREAMING)
     with st.chat_message("assistant"):
-        message_placeholder = st.empty()
-        full_response = ""
-
         try:
             stream = client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -230,17 +228,18 @@ if prompt:
                 stream=True
             )
 
-            for chunk in stream:
-                delta = chunk.choices[0].delta.content
-                if delta:
-                    full_response += delta
-                    message_placeholder.markdown(full_response + "▌")
+            def response_generator():
+                full_text = ""
+                for chunk in stream:
+                    delta = chunk.choices[0].delta.content
+                    if delta:
+                        full_text += delta
+                        yield delta
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": full_text}
+                )
 
-            message_placeholder.markdown(full_response)
-
-            st.session_state.messages.append(
-                {"role": "assistant", "content": full_response}
-            )
+            st.write_stream(response_generator())
 
         except Exception as e:
             error_message = f"Something went wrong: {e}"
