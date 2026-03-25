@@ -135,7 +135,7 @@ div.stButton > button:active {
 
 # ---------------- HEADER ----------------
 st.markdown(
-    '<div class="wealth-subtitle">💸 Your judgment-free space to improve budgeting, spending, and saving habits.</div>',
+    '<div class="wealth-subtitle">Your judgment-free space for smarter money habits.</div>',
     unsafe_allow_html=True
 )
 
