@@ -12,6 +12,26 @@ client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 # -------------------------
 st.set_page_config(page_title="WalletWise", page_icon="")
 st.title("WalletWise")
+st.markdown("""
+<style>
+div.stButton > button {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(6px);
+    color: #6b4f3b;
+    border: 1px solid rgba(107, 79, 59, 0.25);
+    border-radius: 14px;
+    padding: 10px 16px;
+    font-size: 14px;
+    transition: all 0.25s ease;
+}
+
+div.stButton > button:hover {
+    background: rgba(107, 79, 59, 0.12);
+    border: 1px solid rgba(107, 79, 59, 0.6);
+    transform: translateY(-2px);
+}
+</style>
+""", unsafe_allow_html=True)
 st.caption("A supportive budgeting and money wellness chatbot")
 
 # ---------- SAMPLE QUESTION CALLBACK ----------
