@@ -7,8 +7,37 @@ st.set_page_config(
     page_icon="💸",
     layout="centered"
 )
+st.markdown("""
+<style>
 
-# ---------------- CUSTOM CSS ----------------
+/* WealthWell Title */
+.wealth-title {
+    font-size: 3rem;
+    font-weight: 700;
+    text-align: center;
+    background: linear-gradient(90deg, #5c4033, #c8a27a);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.2rem;
+    letter-spacing: 0.5px;
+}
+
+/* Subtitle */
+.wealth-subtitle {
+    text-align: center;
+    font-size: 1rem;
+    color: #7a5c4d;
+    margin-bottom: 1.5rem;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="wealth-title">WealthWell</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="wealth-subtitle">Build better money habits. Feel in control of your finances.</div>',
+    unsafe_allow_html=True
+)
 # ---------------- CUSTOM CSS ----------------
 st.markdown("""
 <style>
