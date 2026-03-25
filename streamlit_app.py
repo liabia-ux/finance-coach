@@ -1,247 +1,185 @@
 import streamlit as st
 from openai import OpenAI
-import re
 
-# -------------------------
-# OPENAI CLIENT
-# -------------------------
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(
+    page_title="Finance Coach",
+    page_icon="💸",
+    layout="centered"
+)
 
-# -------------------------
-# PAGE SETUP
-# -------------------------
-st.set_page_config(page_title="WalletWise", page_icon="")
-st.title("WalletWise")
+# ---------------- CUSTOM CSS ----------------
 st.markdown("""
 <style>
-
-/* Container for bubbles */
-.bubble-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 10px;
-    margin-bottom: 15px;
+/* App background */
+.stApp {
+    background: linear-gradient(180deg, #fffaf6 0%, #f7efe8 100%);
 }
 
-/* Individual bubble */
-.bubble {
-    padding: 10px 16px;
+/* Title area */
+.main-title {
+    font-size: 2.3rem;
+    font-weight: 700;
+    color: #5c4033;
+    margin-bottom: 0.2rem;
+}
+
+.sub-title {
+    color: #7a5c4d;
+    font-size: 1rem;
+    margin-bottom: 1.2rem;
+}
+
+/* Section label */
+.sample-label {
+    font-weight: 600;
+    color: #6b4f3b;
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Style all Streamlit buttons like bubbles */
+div.stButton > button {
+    width: 100%;
     border-radius: 999px;
-    font-size: 14px;
-    color: #5a4032;
-    background: rgba(255, 248, 240, 0.6);
-    border: 1px solid rgba(90, 64, 50, 0.25);
-    backdrop-filter: blur(6px);
-    cursor: pointer;
-    transition: all 0.25s ease;
-    animation: floatIn 0.5s ease forwards;
-    opacity: 0;
+    padding: 0.7rem 1rem;
+    border: 1px solid rgba(107, 79, 59, 0.28);
+    background: rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(8px);
+    color: #5f4637;
+    font-size: 0.95rem;
+    font-weight: 500;
+    box-shadow: 0 4px 14px rgba(92, 64, 51, 0.06);
+    transition: all 0.22s ease;
 }
 
-/* Hover animation */
-.bubble:hover {
-    background: rgba(90, 64, 50, 0.1);
-    transform: translateY(-3px) scale(1.03);
-    border: 1px solid rgba(90, 64, 50, 0.5);
+div.stButton > button:hover {
+    border: 1px solid rgba(107, 79, 59, 0.55);
+    background: rgba(107, 79, 59, 0.08);
+    color: #4d372b;
+    transform: translateY(-2px);
 }
 
-/* Click effect */
-.bubble:active {
-    transform: scale(0.96);
+div.stButton > button:active {
+    transform: scale(0.98);
 }
 
-/* Entrance animation */
-@keyframes floatIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+/* Chat input */
+[data-testid="stChatInput"] {
+    margin-top: 1rem;
 }
 
+/* Optional container softness */
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- SAMPLE QUESTION CALLBACK ----------
-def use_sample_question(question):
-    st.session_state.selected_question = question
+# ---------------- HEADER ----------------
+st.markdown('<div class="main-title">💸 Finance Coach</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="sub-title">Your judgment-free space to improve budgeting, spending, and saving habits.</div>',
+    unsafe_allow_html=True
+)
 
-# ---------- SAMPLE QUESTIONS ----------
-st.markdown("**Try asking:**")
+# ---------------- OPENAI CLIENT ----------------
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+# ---------------- SESSION STATE ----------------
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are Finance Coach, a supportive financial wellness chatbot. "
+                "Help users with budgeting, spending habits, savings strategies, and money organization. "
+                "Be warm, practical, encouraging, and non-judgmental. "
+                "Do not give legal, tax, or investment advice. "
+                "When useful, offer realistic budget breakdowns across categories like rent, groceries, "
+                "transportation, debt payments, savings, dining out, and entertainment. "
+                "Keep responses clear and easy to follow."
+            )
+        }
+    ]
+
+if "selected_prompt" not in st.session_state:
+    st.session_state.selected_prompt = None
+
+
+# ---------------- CALLBACK ----------------
+def set_prompt(question: str) -> None:
+    st.session_state.selected_prompt = question
+
+
+# ---------------- SAMPLE QUESTIONS ----------------
+st.markdown('<div class="sample-label">Sample questions</div>', unsafe_allow_html=True)
 
 sample_questions = [
-    "How much should I budget for groceries each month?",
-    "Can you help me make a beginner monthly budget?",
-    "Why do I keep overspending and how can I stop?",
+    "How do I start budgeting if I’ve never made one before?",
+    "Help me create a simple monthly budget.",
+    "Why do I keep impulse spending and how can I stop?",
     "What percentage of my income should go to rent?",
-    "Help me split my budget into needs, wants, and savings.",
-    "How can I reduce impulse spending?",
+    "How should I divide my money between needs, wants, and savings?",
+    "Can you help me figure out a grocery budget?",
 ]
 
-# Create clickable bubbles
-bubble_html = '<div class="bubble-container">'
-for i, q in enumerate(sample_questions):
-    bubble_html += f"""
-    <form action="" method="get">
-        <button class="bubble" name="question" value="{q}" style="animation-delay: {i * 0.05}s;">
-            {q}
-        </button>
-    </form>
-    """
-bubble_html += "</div>"
+# Display in rows of 2
+for i in range(0, len(sample_questions), 2):
+    cols = st.columns(2)
+    for j in range(2):
+        if i + j < len(sample_questions):
+            with cols[j]:
+                st.button(
+                    sample_questions[i + j],
+                    key=f"sample_q_{i+j}",
+                    on_click=set_prompt,
+                    args=(sample_questions[i + j],)
+                )
 
-st.markdown(bubble_html, unsafe_allow_html=True)
+# ---------------- DISPLAY CHAT HISTORY ----------------
+for message in st.session_state.messages[1:]:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-# -------------------------
-# SESSION STATE
-# -------------------------
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-if "budget" not in st.session_state:
-    st.session_state.budget = {
-        "groceries": 300,
-        "shopping": 200,
-        "entertainment": 150,
-        "bills": 500,
-    }
-
-if "spending" not in st.session_state:
-    st.session_state.spending = {
-        "groceries": 0,
-        "shopping": 0,
-        "entertainment": 0,
-        "bills": 0,
-    }
-
-# -------------------------
-# SIDEBAR - BUDGET SETUP
-# -------------------------
-st.sidebar.header("💰 Budget Setup")
-
-income = st.sidebar.number_input("Weekly Income ($)", min_value=0)
-
-if st.sidebar.button("Generate Budget"):
-    if income > 0:
-        st.session_state.budget = {
-            "groceries": round(income * 0.25),
-            "shopping": round(income * 0.15),
-            "entertainment": round(income * 0.10),
-            "bills": round(income * 0.50),
-        }
-
-st.sidebar.subheader("📊 Your Budget")
-st.sidebar.write(st.session_state.budget)
-
-st.sidebar.subheader("💸 Your Spending")
-st.sidebar.write(st.session_state.spending)
-
-# -------------------------
-# HELPER: EXTRACT SPENDING
-# -------------------------
-def extract_spending(text):
-    categories = ["groceries", "shopping", "entertainment", "bills"]
-    amount_match = re.findall(r"\$?(\d+)", text)
-
-    if amount_match:
-        amount = int(amount_match[0])
-        for cat in categories:
-            if cat in text.lower():
-                return cat, amount
-    return None, 0
-
-# -------------------------
-# DISPLAY CHAT HISTORY
-# -------------------------
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
-# ----------------------------
-# Chat Logic
-# -----------------------------
-query_params = st.query_params
+# ---------------- INPUT LOGIC ----------------
+typed_prompt = st.chat_input("Ask me about budgeting, saving, or spending habits...")
 
 prompt = None
+if st.session_state.selected_prompt:
+    prompt = st.session_state.selected_prompt
+    st.session_state.selected_prompt = None
+elif typed_prompt:
+    prompt = typed_prompt
 
-if "question" in query_params:
-    prompt = query_params["question"]
-elif st.chat_input("Ask me about your finances..."):
-    prompt = st.chat_input
-# -------------------------
-# CHAT INPUT
-# -------------------------
-prompt = st.chat_input("Ask about your finances...")
-
+# ---------------- RESPONSE LOGIC ----------------
 if prompt:
-    # Add user message
+    # Show user message
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # Detect spending
-    category, amount = extract_spending(prompt)
-    alert_message = ""
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-    if category:
-        st.session_state.spending[category] += amount
-
-        if st.session_state.spending[category] > st.session_state.budget[category]:
-            alert_message = f"⚠️ Alert: Your {category} spending (${st.session_state.spending[category]}) exceeds your budget (${st.session_state.budget[category]})!"
-
-    # SYSTEM PROMPT (SYNCED WITH YOUR MODEL)
-    system_prompt = f"""
-
-You are a behavioral finance coach and budgeting assistant focused on helping users improve their financial decisions through awareness, structure, and actionable guidance. Your role is to help users understand their spending habits, identify patterns, and build realistic, sustainable budgets—not just provide financial facts.
-Maintain a tone that is supportive, non-judgmental, clear, and slightly conversational. Avoid being critical, overly technical, or generic. Always tailor your responses to the user’s situation.
-Help users break spending into needs, wants, and savings, identify imbalances, and suggest practical improvements. When relevant, explore behavioral triggers behind spending and ask thoughtful, reflective questions. Provide actionable outputs in every response, such as a recommended budget breakdown, a small adjustment, or a clear next step.
-If users show signs of overspending or low savings, gently point it out, explain why it matters, and offer realistic solutions. Use general budgeting guidelines (e.g., needs, wants, savings) but adapt them to the user’s lifestyle.
-Keep responses structured and easy to follow with a brief insight, explanation, recommendation, and next step. If numbers are provided, calculate totals or percentages; if information is missing, ask clarifying questions.
-Do not provide illegal or unethical advice or act as a licensed financial advisor. Your goal is to help users feel more in control, aware, and confident in their financial decisions.
-
-User Budget:
-{st.session_state.budget}
-
-User Spending:
-{st.session_state.spending}
-
-Your role:
-- Help users understand their spending habits
-- Identify emotional or impulsive spending
-- Encourage smarter financial decisions
-- Give actionable advice
-- Be supportive, calm, and non-judgmental
-
-Rules:
-- If spending exceeds budget → explain why + give solution
-- Ask follow-up questions if needed
-- Give specific, practical advice (not generic)
-- Never shame the user
-
-Keep responses clear and helpful.
-"""
-
-    full_messages = [{"role": "system", "content": system_prompt}] + st.session_state.messages
-
-    # -------------------------
-    # AI RESPONSE
-    # -------------------------
+    # Get assistant response
     with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
+        try:
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=full_messages
+                messages=st.session_state.messages,
+                temperature=0.7,
             )
 
-            reply = response.choices[0].message.content
-
-            # Add alert if needed
-            if alert_message:
-                reply = alert_message + "\n\n" + reply
-
-            st.markdown(reply)
+            assistant_reply = response.choices[0].message.content
+            st.markdown(assistant_reply)
 
             st.session_state.messages.append(
-                {"role": "assistant", "content": reply}
+                {"role": "assistant", "content": assistant_reply}
+            )
+
+        except Exception as e:
+            error_message = f"Something went wrong: {e}"
+            st.error(error_message)
+            st.session_state.messages.append(
+                {"role": "assistant", "content": error_message}
             )
