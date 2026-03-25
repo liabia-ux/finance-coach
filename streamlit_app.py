@@ -38,6 +38,7 @@ st.markdown(
     '<div class="wealth-subtitle">Build better money habits. Feel in control of your finances.</div>',
     unsafe_allow_html=True
 )
+
 # ---------------- CUSTOM CSS ----------------
 st.markdown("""
 <style>
@@ -130,6 +131,23 @@ div.stButton > button:active {
     color: #3a3a3a !important;
 }
 
+/* Budget tool styling */
+div[data-testid="stExpander"] {
+    border: 1px solid rgba(107, 79, 59, 0.18);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.35);
+    backdrop-filter: blur(8px);
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+div[data-testid="stMetric"] {
+    background: rgba(255, 255, 255, 0.35);
+    border: 1px solid rgba(107, 79, 59, 0.15);
+    padding: 12px;
+    border-radius: 16px;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -162,11 +180,109 @@ if "messages" not in st.session_state:
 if "selected_prompt" not in st.session_state:
     st.session_state.selected_prompt = None
 
+if "user_budget" not in st.session_state:
+    st.session_state.user_budget = {
+        "income": 0,
+        "rent": 0,
+        "groceries": 0,
+        "transportation": 0,
+        "savings": 0,
+        "dining_out": 0,
+        "entertainment": 0,
+        "other": 0,
+    }
 
 # ---------------- CALLBACK ----------------
 def set_prompt(question: str) -> None:
     st.session_state.selected_prompt = question
 
+# ---------------- BUDGET PLANNER ----------------
+st.markdown('<div class="sample-label">Budget planner</div>', unsafe_allow_html=True)
+
+with st.expander("Set your monthly budget", expanded=False):
+    col1, col2 = st.columns(2)
+
+    with col1:
+        income = st.number_input(
+            "Monthly Income",
+            min_value=0,
+            step=50,
+            value=st.session_state.user_budget["income"]
+        )
+        rent = st.number_input(
+            "Rent / Housing",
+            min_value=0,
+            step=50,
+            value=st.session_state.user_budget["rent"]
+        )
+        groceries = st.number_input(
+            "Groceries",
+            min_value=0,
+            step=25,
+            value=st.session_state.user_budget["groceries"]
+        )
+        transportation = st.number_input(
+            "Transportation",
+            min_value=0,
+            step=25,
+            value=st.session_state.user_budget["transportation"]
+        )
+
+    with col2:
+        savings = st.number_input(
+            "Savings",
+            min_value=0,
+            step=25,
+            value=st.session_state.user_budget["savings"]
+        )
+        dining_out = st.number_input(
+            "Dining Out",
+            min_value=0,
+            step=25,
+            value=st.session_state.user_budget["dining_out"]
+        )
+        entertainment = st.number_input(
+            "Entertainment",
+            min_value=0,
+            step=25,
+            value=st.session_state.user_budget["entertainment"]
+        )
+        other = st.number_input(
+            "Other",
+            min_value=0,
+            step=25,
+            value=st.session_state.user_budget["other"]
+        )
+
+    if st.button("Save Budget"):
+        st.session_state.user_budget = {
+            "income": income,
+            "rent": rent,
+            "groceries": groceries,
+            "transportation": transportation,
+            "savings": savings,
+            "dining_out": dining_out,
+            "entertainment": entertainment,
+            "other": other,
+        }
+        st.success("Budget saved.")
+
+budget = st.session_state.user_budget
+total_allocated = (
+    budget["rent"]
+    + budget["groceries"]
+    + budget["transportation"]
+    + budget["savings"]
+    + budget["dining_out"]
+    + budget["entertainment"]
+    + budget["other"]
+)
+remaining = budget["income"] - total_allocated
+
+col1, col2, col3 = st.columns(3)
+col1.metric("Income", f"${budget['income']:,}")
+col2.metric("Allocated", f"${total_allocated:,}")
+col3.metric("Remaining", f"${remaining:,}")
 
 # ---------------- SAMPLE QUESTIONS ----------------
 st.markdown('<div class="sample-label">Sample questions</div>', unsafe_allow_html=True)
@@ -209,15 +325,12 @@ elif typed_prompt:
     prompt = typed_prompt
 
 # ---------------- RESPONSE LOGIC ----------------
-# ---------------- RESPONSE LOGIC ----------------
 if prompt:
-    # Show user message
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Get assistant response (STREAMING)
     with st.chat_message("assistant"):
         try:
             stream = client.chat.completions.create(
