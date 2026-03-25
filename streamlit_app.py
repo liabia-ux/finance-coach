@@ -14,6 +14,10 @@ st.set_page_config(page_title="WalletWise", page_icon="")
 st.title("WalletWise")
 st.caption("A supportive budgeting and money wellness chatbot")
 
+# ---------- SAMPLE QUESTION CALLBACK ----------
+def use_sample_question(question):
+    st.session_state.selected_question = question
+
 # ---------- SAMPLE QUESTIONS ----------
 st.markdown("**Try asking:**")
 
