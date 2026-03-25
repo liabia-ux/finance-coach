@@ -217,20 +217,29 @@ if prompt:
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Get assistant response
+    # Get assistant response (STREAMING)
     with st.chat_message("assistant"):
+        message_placeholder = st.empty()
+        full_response = ""
+
         try:
-            response = client.chat.completions.create(
+            stream = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=st.session_state.messages,
                 temperature=0.7,
+                stream=True
             )
 
-            assistant_reply = response.choices[0].message.content
-            st.markdown(assistant_reply)
+            for chunk in stream:
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    full_response += delta
+                    message_placeholder.markdown(full_response + "▌")
+
+            message_placeholder.markdown(full_response)
 
             st.session_state.messages.append(
-                {"role": "assistant", "content": assistant_reply}
+                {"role": "assistant", "content": full_response}
             )
 
         except Exception as e:
