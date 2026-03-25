@@ -14,25 +14,57 @@ st.set_page_config(page_title="WalletWise", page_icon="")
 st.title("WalletWise")
 st.markdown("""
 <style>
-div.stButton > button {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(6px);
-    color: #6b4f3b;
-    border: 1px solid rgba(107, 79, 59, 0.25);
-    border-radius: 14px;
-    padding: 10px 16px;
-    font-size: 14px;
-    transition: all 0.25s ease;
+
+/* Container for bubbles */
+.bubble-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+    margin-bottom: 15px;
 }
 
-div.stButton > button:hover {
-    background: rgba(107, 79, 59, 0.12);
-    border: 1px solid rgba(107, 79, 59, 0.6);
-    transform: translateY(-2px);
+/* Individual bubble */
+.bubble {
+    padding: 10px 16px;
+    border-radius: 999px;
+    font-size: 14px;
+    color: #5a4032;
+    background: rgba(255, 248, 240, 0.6);
+    border: 1px solid rgba(90, 64, 50, 0.25);
+    backdrop-filter: blur(6px);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    animation: floatIn 0.5s ease forwards;
+    opacity: 0;
 }
+
+/* Hover animation */
+.bubble:hover {
+    background: rgba(90, 64, 50, 0.1);
+    transform: translateY(-3px) scale(1.03);
+    border: 1px solid rgba(90, 64, 50, 0.5);
+}
+
+/* Click effect */
+.bubble:active {
+    transform: scale(0.96);
+}
+
+/* Entrance animation */
+@keyframes floatIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 </style>
 """, unsafe_allow_html=True)
-st.caption("A supportive budgeting and money wellness chatbot")
 
 # ---------- SAMPLE QUESTION CALLBACK ----------
 def use_sample_question(question):
@@ -50,11 +82,19 @@ sample_questions = [
     "How can I reduce impulse spending?",
 ]
 
-cols = st.columns(2)
-for i, question in enumerate(sample_questions):
-    with cols[i % 2]:
-        if st.button(question, key=f"sample_{i}"):
-            st.session_state.pending_prompt = question
+# Create clickable bubbles
+bubble_html = '<div class="bubble-container">'
+for i, q in enumerate(sample_questions):
+    bubble_html += f"""
+    <form action="" method="get">
+        <button class="bubble" name="question" value="{q}" style="animation-delay: {i * 0.05}s;">
+            {q}
+        </button>
+    </form>
+    """
+bubble_html += "</div>"
+
+st.markdown(bubble_html, unsafe_allow_html=True)
 
 # -------------------------
 # SESSION STATE
@@ -120,7 +160,17 @@ def extract_spending(text):
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+# ----------------------------
+# Chat Logic
+# -----------------------------
+query_params = st.query_params
 
+prompt = None
+
+if "question" in query_params:
+    prompt = query_params["question"]
+elif st.chat_input("Ask me about your finances..."):
+    prompt = st.chat_input
 # -------------------------
 # CHAT INPUT
 # -------------------------
