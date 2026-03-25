@@ -134,9 +134,8 @@ div.stButton > button:active {
 """, unsafe_allow_html=True)
 
 # ---------------- HEADER ----------------
-st.markdown('<div class="main-title">💸 Finance Coach</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="sub-title">Your judgment-free space to improve budgeting, spending, and saving habits.</div>',
+    '<div class="wealth-subtitle">💸 Your judgment-free space to improve budgeting, spending, and saving habits.</div>',
     unsafe_allow_html=True
 )
 
