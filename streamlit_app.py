@@ -9,6 +9,7 @@ st.set_page_config(
 )
 
 # ---------------- CUSTOM CSS ----------------
+# ---------------- CUSTOM CSS ----------------
 st.markdown("""
 <style>
 /* App background */
@@ -74,8 +75,6 @@ div.stButton > button:active {
     padding-top: 2rem;
     padding-bottom: 2rem;
 }
-st.markdown("""
-<style>
 
 /* Fix chat text color */
 [data-testid="stChatMessage"] {
