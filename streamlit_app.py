@@ -196,93 +196,106 @@ if "user_budget" not in st.session_state:
 def set_prompt(question: str) -> None:
     st.session_state.selected_prompt = question
 
-# ---------------- BUDGET PLANNER ----------------
-st.markdown('<div class="sample-label">Budget planner</div>', unsafe_allow_html=True)
+# ---------------- SIDEBAR BUDGET TOOL ----------------
+with st.sidebar:
+    st.markdown("### 💰 Budget Planner")
 
-with st.expander("Set your monthly budget", expanded=False):
-    col1, col2 = st.columns(2)
-
-    with col1:
-        income = st.number_input(
-            "Monthly Income",
-            min_value=0,
-            step=50,
-            value=st.session_state.user_budget["income"]
-        )
-        rent = st.number_input(
-            "Rent / Housing",
-            min_value=0,
-            step=50,
-            value=st.session_state.user_budget["rent"]
-        )
-        groceries = st.number_input(
-            "Groceries",
-            min_value=0,
-            step=25,
-            value=st.session_state.user_budget["groceries"]
-        )
-        transportation = st.number_input(
-            "Transportation",
-            min_value=0,
-            step=25,
-            value=st.session_state.user_budget["transportation"]
-        )
-
-    with col2:
-        savings = st.number_input(
-            "Savings",
-            min_value=0,
-            step=25,
-            value=st.session_state.user_budget["savings"]
-        )
-        dining_out = st.number_input(
-            "Dining Out",
-            min_value=0,
-            step=25,
-            value=st.session_state.user_budget["dining_out"]
-        )
-        entertainment = st.number_input(
-            "Entertainment",
-            min_value=0,
-            step=25,
-            value=st.session_state.user_budget["entertainment"]
-        )
-        other = st.number_input(
-            "Other",
-            min_value=0,
-            step=25,
-            value=st.session_state.user_budget["other"]
-        )
-
-    if st.button("Save Budget"):
+    if "user_budget" not in st.session_state:
         st.session_state.user_budget = {
-            "income": income,
-            "rent": rent,
-            "groceries": groceries,
-            "transportation": transportation,
-            "savings": savings,
-            "dining_out": dining_out,
-            "entertainment": entertainment,
-            "other": other,
+            "income": 0,
+            "rent": 0,
+            "groceries": 0,
+            "transportation": 0,
+            "savings": 0,
+            "dining_out": 0,
+            "entertainment": 0,
+            "other": 0,
         }
-        st.success("Budget saved.")
 
-budget = st.session_state.user_budget
-total_allocated = (
-    budget["rent"]
-    + budget["groceries"]
-    + budget["transportation"]
-    + budget["savings"]
-    + budget["dining_out"]
-    + budget["entertainment"]
-    + budget["other"]
-)
-remaining = budget["income"] - total_allocated
+    with st.expander("Set your monthly budget", expanded=False):
+        col1, col2 = st.columns(2)
 
-col1, col2, col3 = st.columns(3)
-col1.metric("Income", f"${budget['income']:,}")
-col2.metric("Allocated", f"${total_allocated:,}")
-col3.metric("Remaining", f"${remaining:,}")
+        with col1:
+            income = st.number_input(
+                "Income",
+                min_value=0,
+                step=50,
+                value=st.session_state.user_budget["income"]
+            )
+            rent = st.number_input(
+                "Rent",
+                min_value=0,
+                step=50,
+                value=st.session_state.user_budget["rent"]
+            )
+            groceries = st.number_input(
+                "Groceries",
+                min_value=0,
+                step=25,
+                value=st.session_state.user_budget["groceries"]
+            )
+            transportation = st.number_input(
+                "Transport",
+                min_value=0,
+                step=25,
+                value=st.session_state.user_budget["transportation"]
+            )
+
+        with col2:
+            savings = st.number_input(
+                "Savings",
+                min_value=0,
+                step=25,
+                value=st.session_state.user_budget["savings"]
+            )
+            dining_out = st.number_input(
+                "Dining",
+                min_value=0,
+                step=25,
+                value=st.session_state.user_budget["dining_out"]
+            )
+            entertainment = st.number_input(
+                "Fun",
+                min_value=0,
+                step=25,
+                value=st.session_state.user_budget["entertainment"]
+            )
+            other = st.number_input(
+                "Other",
+                min_value=0,
+                step=25,
+                value=st.session_state.user_budget["other"]
+            )
+
+        if st.button("Save Budget"):
+            st.session_state.user_budget = {
+                "income": income,
+                "rent": rent,
+                "groceries": groceries,
+                "transportation": transportation,
+                "savings": savings,
+                "dining_out": dining_out,
+                "entertainment": entertainment,
+                "other": other,
+            }
+            st.success("Saved")
+
+    # -------- SUMMARY --------
+    budget = st.session_state.user_budget
+    total = (
+        budget["rent"]
+        + budget["groceries"]
+        + budget["transportation"]
+        + budget["savings"]
+        + budget["dining_out"]
+        + budget["entertainment"]
+        + budget["other"]
+    )
+    remaining = budget["income"] - total
+
+    st.markdown("#### 📊 Snapshot")
+    st.metric("Income", f"${budget['income']:,}")
+    st.metric("Remaining", f"${remaining:,}")
 
 # ---------------- SAMPLE QUESTIONS ----------------
 st.markdown('<div class="sample-label">Sample questions</div>', unsafe_allow_html=True)
