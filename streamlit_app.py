@@ -12,6 +12,25 @@ client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 # -------------------------
 st.set_page_config(page_title="WalletWise", page_icon="")
 st.title("WalletWise")
+st.caption("A supportive budgeting and money wellness chatbot")
+
+# ---------- SAMPLE QUESTIONS ----------
+st.markdown("**Try asking:**")
+
+sample_questions = [
+    "How much should I budget for groceries each month?",
+    "Can you help me make a beginner monthly budget?",
+    "Why do I keep overspending and how can I stop?",
+    "What percentage of my income should go to rent?",
+    "Help me split my budget into needs, wants, and savings.",
+    "How can I reduce impulse spending?",
+]
+
+cols = st.columns(2)
+for i, question in enumerate(sample_questions):
+    with cols[i % 2]:
+        if st.button(question, key=f"sample_{i}"):
+            st.session_state.pending_prompt = question
 
 # -------------------------
 # SESSION STATE
