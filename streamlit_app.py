@@ -74,6 +74,34 @@ div.stButton > button:active {
     padding-top: 2rem;
     padding-bottom: 2rem;
 }
+st.markdown("""
+<style>
+
+/* Fix chat text color */
+[data-testid="stChatMessage"] {
+    color: #2b2b2b !important;
+}
+
+/* Force markdown text inside chat */
+[data-testid="stMarkdownContainer"] p {
+    color: #2b2b2b !important;
+}
+
+/* User + assistant text specifically */
+[data-testid="stChatMessageContent"] {
+    color: #2b2b2b !important;
+}
+
+/* Optional: make assistant slightly darker */
+[data-testid="stChatMessage"][aria-label="assistant"] {
+    color: #1f1f1f !important;
+}
+
+/* Optional: make user text slightly different tone */
+[data-testid="stChatMessage"][aria-label="user"] {
+    color: #3a3a3a !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
