@@ -15,7 +15,7 @@ st.set_page_config(
 # ---------------- AUTO REFRESH FOR IDLE FOLLOW-UP ----------------
 st_autorefresh(interval=15000, key="idle_refresh")
 
-# ---------------- TOP TITLE ----------------
+# ---------------- TOP TITLE + STYLES ----------------
 st.markdown("""
 <style>
 .wealth-title {
@@ -137,6 +137,67 @@ div[data-testid="stMetric"] {
     padding: 14px;
     margin-top: 1rem;
     color: #5f4637;
+}
+
+/* -------- SIDEBAR FIXES -------- */
+section[data-testid="stSidebar"] {
+    background: #232634 !important;
+}
+
+section[data-testid="stSidebar"] * {
+    color: #f4eee7;
+}
+
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] .stMarkdown,
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] div,
+section[data-testid="stSidebar"] span {
+    color: #f4eee7 !important;
+}
+
+section[data-testid="stSidebar"] [data-baseweb="select"] > div {
+    background-color: #0f1320 !important;
+    color: #f4eee7 !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
+}
+
+section[data-testid="stSidebar"] textarea,
+section[data-testid="stSidebar"] input {
+    background-color: #0f1320 !important;
+    color: #f4eee7 !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
+}
+
+section[data-testid="stSidebar"] textarea::placeholder,
+section[data-testid="stSidebar"] input::placeholder {
+    color: #c7beb5 !important;
+    opacity: 1 !important;
+}
+
+section[data-testid="stSidebar"] .stSelectbox label,
+section[data-testid="stSidebar"] .stTextArea label,
+section[data-testid="stSidebar"] .stNumberInput label,
+section[data-testid="stSidebar"] .stExpander label {
+    color: #f4eee7 !important;
+    font-weight: 500;
+}
+
+section[data-testid="stSidebar"] .reflection-card {
+    background: rgba(255, 255, 255, 0.82);
+    color: #5f4637 !important;
+}
+
+section[data-testid="stSidebar"] .reflection-title {
+    color: #5c4033 !important;
+}
+
+section[data-testid="stSidebar"] .reflection-text {
+    color: #6a5347 !important;
+}
+
+section[data-testid="stSidebar"] .small-note {
+    color: #7a6254 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -334,10 +395,35 @@ def is_simple_greeting(text: str) -> bool:
     }
     return cleaned in greetings
 
+def last_assistant_asked_money_redirect() -> bool:
+    for msg in reversed(st.session_state.messages):
+        if msg["role"] == "assistant":
+            content = msg["content"].lower()
+            trigger_phrases = [
+                "is there a money-related part of this for you",
+                "are you feeling overwhelmed about money",
+                "if this ties into money",
+                "i’m here specifically for financial therapy and money-related support",
+                "i'm here specifically for financial therapy and money-related support"
+            ]
+            return any(phrase in content for phrase in trigger_phrases)
+    return False
+
+def is_followup_confirmation(text: str) -> bool:
+    cleaned = text.strip().lower()
+    confirmations = {
+        "yes", "yeah", "yep", "yup", "sure", "it is", "kind of", "a little",
+        "i am", "i do", "okay", "ok"
+    }
+    return cleaned in confirmations
+
 def is_finance_related(text: str) -> bool:
     lower = text.lower().strip()
 
     if is_simple_greeting(lower):
+        return True
+
+    if last_assistant_asked_money_redirect() and is_followup_confirmation(lower):
         return True
 
     keyword_hit = any(word in lower for word in FINANCE_KEYWORDS)
@@ -350,7 +436,6 @@ def is_finance_related(text: str) -> bool:
     if off_topic_hit:
         return False
 
-    # vague emotional prompts get redirected softly
     if any(word in lower for word in SOFT_EMOTION_WORDS):
         return False
 
@@ -370,6 +455,25 @@ def off_topic_response(user_text: str) -> str:
         "If this ties into money, spending, debt, budgeting, or financial stress, "
         "I’d be glad to help. Is there a money-related part of this for you?"
     )
+
+def expand_short_followup(prompt: str) -> str:
+    lower = prompt.strip().lower()
+
+    if last_assistant_asked_money_redirect() and is_followup_confirmation(lower):
+        return (
+            "The user confirmed that this does relate to money. "
+            "Respond warmly and naturally. "
+            "Do not repeat the redirect. "
+            "Ask one gentle, specific follow-up question to help them open up about what is going on financially."
+        )
+
+    if lower in {"no", "not really", "nope"} and last_assistant_asked_money_redirect():
+        return (
+            "The user said this is not about money. "
+            "Briefly and kindly explain that you can only help with financial therapy and money-related support."
+        )
+
+    return prompt
 
 # ---------------- HELPERS ----------------
 def budget_summary_values(budget_data: dict):
@@ -731,10 +835,10 @@ if prompt:
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # store the real visible user message
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # soft finance-only redirect
+    prompt_for_model = expand_short_followup(prompt)
+
     if not is_finance_related(prompt):
         blocked_response = off_topic_response(prompt)
 
@@ -761,7 +865,7 @@ if prompt:
 
     if is_simple_greeting(prompt):
         enriched_prompt = (
-            f"{prompt}\n\n"
+            f"{prompt_for_model}\n\n"
             "The user is only greeting you. Respond warmly, naturally, and briefly. "
             "Do not provide financial advice or emotional analysis unless they ask for money help."
             f"{memory_context}"
@@ -769,7 +873,7 @@ if prompt:
         )
     else:
         enriched_prompt = (
-            f"{prompt}\n\n"
+            f"{prompt_for_model}\n\n"
             "Only respond if the user's message is related to finance, money behavior, budgeting, spending, saving, debt, bills, or financial stress. "
             "If the message is vague and emotional, gently connect it back to money instead of answering unrelated topics. "
             "Respond naturally and conversationally. "
@@ -797,20 +901,22 @@ if prompt:
                 stream=True
             )
 
+            full_text = ""
+
             def response_generator():
-                full_text = ""
+                nonlocal full_text
                 for chunk in stream:
                     delta = chunk.choices[0].delta.content
                     if delta:
                         full_text += delta
                         yield delta
 
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": full_text}
-                )
-                st.session_state.last_assistant_time = time.time()
-
             st.write_stream(response_generator())
+
+            st.session_state.messages.append(
+                {"role": "assistant", "content": full_text}
+            )
+            st.session_state.last_assistant_time = time.time()
 
         except Exception as e:
             error_message = f"Something went wrong: {e}"
