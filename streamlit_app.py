@@ -1,5 +1,6 @@
 import time
 import random
+import re
 import streamlit as st
 from openai import OpenAI
 from streamlit_autorefresh import st_autorefresh
@@ -12,7 +13,6 @@ st.set_page_config(
 )
 
 # ---------------- AUTO REFRESH FOR IDLE FOLLOW-UP ----------------
-# Refresh every 15 seconds while the user is on the page
 st_autorefresh(interval=15000, key="idle_refresh")
 
 # ---------------- TOP TITLE ----------------
@@ -158,15 +158,17 @@ THERAPY_SYSTEM_PROMPT = (
     "Do not sound robotic, overly therapeutic, too intense, or emotionally heavy unless the user is clearly expressing a money-related struggle. "
     "If the user sends a simple greeting like hi, hello, or hey, respond briefly and naturally like a normal human assistant. "
     "Do not start analyzing their emotions, patterns, or financial behavior unless they actually bring up a financial concern or ask for help. "
-    "If the user asks for budgeting or money help, respond with empathy, practical guidance, and gentle reflection when appropriate. "
-    "Only validate emotions when emotions are actually present in the user's message. "
-    "Do not force emotional interpretation onto neutral messages. "
     "If budget fields are empty or zero, do not make assumptions about the user's life or financial state. "
-    "You may acknowledge that no budget has been entered yet, but keep it light and practical. "
-    "When the user is discussing real financial stress, overspending, avoidance, guilt, or anxiety, respond supportively: "
-    "acknowledge briefly, identify a likely pattern simply, then offer one or two small realistic next steps. "
+    "When the user is discussing real financial stress, overspending, avoidance, guilt, or anxiety, respond supportively and simply. "
+    "Prefer this response rhythm when appropriate: "
+    "1) brief acknowledgment, "
+    "2) short reflection or practical framing, "
+    "3) one helpful next step or one gentle follow-up question. "
+    "Do not always give full advice immediately. "
+    "If the user seems emotional or unsure, reflect first before giving detailed advice. "
+    "If the user asks a direct budgeting or planning question, answer clearly and practically without sounding cold. "
     "Keep responses fairly short, conversational, and easy to read. "
-    "Avoid long monologues unless the user asks for more detail. "
+    "Ask at most one follow-up question unless the user asks for more. "
     "Do not give legal, tax, or investment advice."
 )
 
@@ -205,6 +207,18 @@ if "last_user_time" not in st.session_state:
 
 if "idle_followup_sent_for_turn" not in st.session_state:
     st.session_state.idle_followup_sent_for_turn = -1
+
+# NEW: conversational memory
+if "conversation_memory" not in st.session_state:
+    st.session_state.conversation_memory = {
+        "last_topic": "",
+        "support_style": "balanced",   # reflective / practical / balanced
+        "user_state": "neutral",       # neutral / emotional / planning / direct
+        "recent_concern": "",
+        "spending_trigger": "",
+        "goal": "",
+        "last_response_mode": ""
+    }
 
 # ---------------- CALLBACK ----------------
 def set_prompt(question: str) -> None:
@@ -277,12 +291,6 @@ def get_reflection_text(remaining: int | float) -> str:
         return "Your budget is currently balanced to your income. That is a solid starting point."
     return "You currently have money left after your planned spending, which can give you a little flexibility or buffer."
 
-def append_hidden_user_message(prompt: str, enriched_prompt: str) -> list:
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    temp_messages = st.session_state.messages.copy()
-    temp_messages[-1] = {"role": "user", "content": enriched_prompt}
-    return temp_messages
-
 def get_idle_followup() -> str:
     options = [
         "No rush — would it help if we kept it really simple and just started with income and essentials?",
@@ -291,6 +299,171 @@ def get_idle_followup() -> str:
         "If it helps, we can make this super simple together — income, bills, savings, then spending."
     ]
     return random.choice(options)
+
+# ---------------- NEW: RESPONSE MODE + MEMORY ----------------
+def classify_response_mode(text: str) -> str:
+    lower = text.lower().strip()
+
+    if is_simple_greeting(lower):
+        return "greeting"
+
+    emotional_words = [
+        "anxious", "anxiety", "guilty", "ashamed", "overwhelmed", "stress",
+        "stressed", "avoid", "avoiding", "scared", "afraid", "bad with money",
+        "embarrassed", "impulse", "impulse spending", "regret", "panic"
+    ]
+    planning_words = [
+        "budget", "plan", "help me create", "help me build", "monthly budget",
+        "set up", "organize", "breakdown", "categories", "how much should"
+    ]
+    direct_question_words = [
+        "how do i", "what should i", "can you help", "what is", "why do i"
+    ]
+
+    if any(word in lower for word in emotional_words):
+        return "reflective"
+    if any(word in lower for word in planning_words):
+        return "planning"
+    if any(word in lower for word in direct_question_words):
+        return "direct"
+    if len(lower.split()) <= 6:
+        return "gentle_followup"
+
+    return "balanced"
+
+def detect_topic(text: str) -> str:
+    lower = text.lower()
+    if any(k in lower for k in ["budget", "monthly budget", "categories", "income", "expenses"]):
+        return "budgeting"
+    if any(k in lower for k in ["impulse", "stress spend", "overspend", "shopping", "takeout"]):
+        return "spending habits"
+    if any(k in lower for k in ["anxious", "avoid", "bank account", "guilty", "overwhelmed"]):
+        return "money stress"
+    if any(k in lower for k in ["save", "saving", "emergency fund"]):
+        return "saving"
+    if any(k in lower for k in ["debt", "credit card", "loan"]):
+        return "debt"
+    return "general money support"
+
+def extract_trigger(text: str) -> str:
+    lower = text.lower()
+    trigger_patterns = [
+        r"when i[' ]?m ([a-z\s]+)",
+        r"i spend more when i[' ]?m ([a-z\s]+)",
+        r"i overspend when i[' ]?m ([a-z\s]+)",
+        r"when i feel ([a-z\s]+)"
+    ]
+    for pattern in trigger_patterns:
+        match = re.search(pattern, lower)
+        if match:
+            return match.group(1).strip(" .,!?")
+    return ""
+
+def update_memory_from_user_input(prompt: str):
+    memory = st.session_state.conversation_memory
+    mode = classify_response_mode(prompt)
+    topic = detect_topic(prompt)
+    trigger = extract_trigger(prompt)
+
+    memory["last_topic"] = topic
+    memory["last_response_mode"] = mode
+
+    if mode == "reflective":
+        memory["user_state"] = "emotional"
+        memory["support_style"] = "reflective"
+    elif mode in ["planning", "direct"]:
+        memory["user_state"] = "planning"
+        memory["support_style"] = "practical"
+    else:
+        memory["user_state"] = "neutral"
+        memory["support_style"] = "balanced"
+
+    if trigger:
+        memory["spending_trigger"] = trigger
+
+    lower = prompt.lower()
+    if any(k in lower for k in ["save more", "saving", "emergency fund"]):
+        memory["goal"] = "build savings"
+    elif "budget" in lower:
+        memory["goal"] = "create a workable budget"
+    elif any(k in lower for k in ["impulse", "overspend", "stress spend"]):
+        memory["goal"] = "reduce reactive spending"
+
+    if len(prompt.strip()) > 8:
+        memory["recent_concern"] = prompt.strip()
+
+def build_memory_context() -> str:
+    memory = st.session_state.conversation_memory
+    return (
+        "\n\nConversation memory:\n"
+        f"- Last topic: {memory['last_topic'] or 'None yet'}\n"
+        f"- Support style to favor: {memory['support_style']}\n"
+        f"- User state: {memory['user_state']}\n"
+        f"- Recent concern: {memory['recent_concern'] or 'None yet'}\n"
+        f"- Known spending trigger: {memory['spending_trigger'] or 'None noted'}\n"
+        f"- Current goal: {memory['goal'] or 'Not yet clear'}\n"
+        "Use this lightly to keep continuity. Do not repeat it awkwardly. "
+        "Only reference earlier details when it helps the conversation feel natural."
+    )
+
+def build_response_structure_instruction(prompt: str) -> str:
+    mode = classify_response_mode(prompt)
+
+    if mode == "greeting":
+        return (
+            "\n\nResponse structure:\n"
+            "- Respond briefly and warmly.\n"
+            "- Do not give advice yet.\n"
+            "- Do not analyze emotions or patterns."
+        )
+
+    if mode == "reflective":
+        return (
+            "\n\nResponse structure:\n"
+            "- Start with a short, natural acknowledgment.\n"
+            "- Briefly reflect the likely money pattern or feeling in plain language.\n"
+            "- Ask one gentle follow-up question OR offer one very small next step.\n"
+            "- Do not jump straight into a long list."
+        )
+
+    if mode == "planning":
+        return (
+            "\n\nResponse structure:\n"
+            "- Start warm but concise.\n"
+            "- Give a simple practical step or framework.\n"
+            "- End with one small question to tailor the next response.\n"
+            "- Keep it clear and not too long."
+        )
+
+    if mode == "direct":
+        return (
+            "\n\nResponse structure:\n"
+            "- Answer the question directly.\n"
+            "- Keep the tone warm and human.\n"
+            "- Add one small practical suggestion if useful.\n"
+            "- Avoid over-reflecting."
+        )
+
+    if mode == "gentle_followup":
+        return (
+            "\n\nResponse structure:\n"
+            "- Be supportive and simple.\n"
+            "- Do not over-explain.\n"
+            "- Ask one clarifying question."
+        )
+
+    return (
+        "\n\nResponse structure:\n"
+        "- Be conversational and steady.\n"
+        "- Use brief acknowledgment, brief guidance, then one small next step.\n"
+        "- Do not turn the reply into a lecture."
+    )
+
+def append_hidden_user_message(prompt: str, enriched_prompt: str) -> list:
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    temp_messages = st.session_state.messages.copy()
+    temp_messages[-1] = {"role": "user", "content": enriched_prompt}
+    return temp_messages
 
 # ---------------- SIDEBAR ----------------
 with st.sidebar:
@@ -419,6 +592,8 @@ elif typed_prompt:
 if prompt:
     st.session_state.last_user_time = time.time()
 
+    update_memory_from_user_input(prompt)
+
     budget_context = build_budget_context(st.session_state.user_budget)
     emotion_context = (
         "\n\nUser emotional context:\n"
@@ -426,12 +601,16 @@ if prompt:
         f"- Reflection note: {st.session_state.reflection_note if st.session_state.reflection_note.strip() else 'No reflection provided.'}\n"
         "Use this only when the message is actually about money stress, guilt, avoidance, overspending, or emotional difficulty."
     )
+    memory_context = build_memory_context()
+    structure_instruction = build_response_structure_instruction(prompt)
 
     if is_simple_greeting(prompt):
         enriched_prompt = (
             f"{prompt}\n\n"
             "The user is only greeting you. Respond warmly, naturally, and briefly. "
             "Do not provide financial advice or emotional analysis unless they ask for help."
+            f"{memory_context}"
+            f"{structure_instruction}"
         )
     else:
         enriched_prompt = (
@@ -441,9 +620,13 @@ if prompt:
             "Only use a financial therapy style if the user is actually expressing a money problem, emotional stress, guilt, anxiety, avoidance, or overspending pattern. "
             "If the user is asking a straightforward budgeting question, be warm but direct. "
             "Do not overanalyze neutral messages. "
-            "If useful, include one small next step."
+            "If useful, include one small next step. "
+            "If the user seems emotional, reflect before advising. "
+            "If the user seems planning-oriented, be practical first."
             f"{budget_context}"
             f"{emotion_context}"
+            f"{memory_context}"
+            f"{structure_instruction}"
         )
 
     temp_messages = append_hidden_user_message(prompt, enriched_prompt)
