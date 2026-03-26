@@ -1,55 +1,186 @@
-# 💰 Finance Coach Chatbot
+# 💬 Finance Coach — A Financial Therapy Chatbot
 
-An AI-powered finance chatbot that helps users understand their finances, build better habits, and make smarter financial decisions.
+Finance Coach is a conversational AI designed to help users build a healthier relationship with money.
+Instead of just giving budgeting advice, it focuses on **financial behavior, emotions, and decision-making patterns**.
 
-## 🚀 Features
+This is not just a budgeting tool — it’s a **financial wellness companion**.
 
-- Conversational AI for financial questions
-- Budgeting and saving guidance
-- Personalized financial insights
-- Simple web interface using Streamlit
+---
+
+## ✨ Features
+
+### 🧠 Financial Therapy Conversations
+
+* Gentle, non-judgmental tone
+* Helps users reflect on spending habits and money emotions
+* Redirects conversations back to financial wellness
+* Encourages awareness before action
+
+### 💡 Smart Guidance (Not Overwhelming)
+
+* Short, conversational responses
+* Practical suggestions (not rigid rules)
+* Focus on behavior → not just numbers
+
+### 🎯 Focused Scope
+
+* Strictly limited to:
+
+  * Budgeting
+  * Spending habits
+  * Saving strategies
+  * Financial stress & mindset
+* Politely redirects non-finance questions
+
+### ⚡ Interactive UX
+
+* Clean chat interface
+* Reduced “prompt bubbles” (only 4 intentional starters)
+* Human-like placeholder text
+* Follow-up messages if user becomes inactive
+
+### 📊 Budget Sidebar Tool
+
+* Sleek, minimal UI (toggle-based)
+* Users can:
+
+  * Input income
+  * Track spending categories
+  * Reflect on financial balance
+* Designed to feel **lightweight, not overwhelming**
+
+### 🧠 Memory (Session-Based)
+
+* Remembers context within conversation
+* Builds continuity in financial discussions
+* Makes interactions feel more personal
+
+---
 
 ## 🛠️ Tech Stack
 
-- Python
-- Streamlit
-- OpenAI API
+* **Frontend/UI:** Streamlit
+* **LLM Integration:** OpenAI API / Ollama (local models supported)
+* **Language:** Python
+* **Optional Models:**
+
+  * `llama3`
+  * `bge-small-en-v1.5` (for embeddings / knowledge retrieval)
+
+---
+
+## 🚀 How It Works
+
+1. User starts a conversation
+2. Bot responds in a **financial therapy style**
+3. If needed, bot:
+
+   * Asks reflective questions
+   * Suggests small behavioral shifts
+4. Budget tool supports **practical application**
+5. If user goes off-topic → bot gently redirects:
+
+   > “Are you feeling overwhelmed about money?”
+
+---
 
 ## 📦 Installation
 
-1. Clone the repository:
-git clone https://github.com/your-username/finance-coach.git
+Clone the repository:
 
-2. Navigate into the project folder:
+```bash
+git clone https://github.com/liabia-ux/finance-coach.git
 cd finance-coach
+```
 
-3. Install dependencies:
+Install dependencies:
+
+```bash
 pip install -r requirements.txt
+```
 
-4. Add your OpenAI API key:
-Create a `.env` file and add:
-OPENAI_API_KEY=your_api_key_here
+Run the app:
 
-## ▶️ Run the App
-
+```bash
 streamlit run streamlit_app.py
+```
 
-## 🧠 How It Works
+---
 
-- User enters a financial question
-- The app sends the request to an AI model
-- The model generates a response
-- The response is displayed in a chat interface
+## 🔐 Environment Variables
+
+Create a `.env` or use Streamlit secrets:
+
+```
+OPENAI_API_KEY=your_api_key_here
+```
+
+---
+
+## 🧭 Design Philosophy
+
+Finance Coach is built on three principles:
+
+### 1. Behavior Over Perfection
+
+Money habits matter more than perfect budgets.
+
+### 2. Emotional Awareness
+
+Spending is often emotional — not just logical.
+
+### 3. Simplicity Wins
+
+Too many tools overwhelm users.
+This app keeps things **clean, calm, and focused**.
+
+---
+
+## 🎯 Target Users
+
+* People who feel overwhelmed by money
+* Beginners who don’t know where to start
+* Users tired of rigid budgeting apps
+* Anyone wanting a **softer, more human approach** to finances
+
+---
 
 ## ⚠️ Disclaimer
 
-This chatbot is for informational purposes only and does not provide professional financial advice.
+This chatbot:
 
-## 👩🏽‍💻 Author
+* Does **not** provide financial, legal, or investment advice
+* Is intended for **educational and behavioral support only**
 
-Khalia Anderson
+---
 
-This project contains the Ollama Modelfile for my finance chatbot.
+## 🔮 Future Improvements
+
+* Persistent long-term memory
+* Mobile app version (iOS/Android)
+* Spending pattern detection
+* Personalized nudges & insights
+* AI-driven budget recommendations
+* Voice-based interaction
+
+---
+
+## 👩‍💻 Author
+
+**Lia Anderson**
+Information Systems & Analytics @ Loyola University Chicago
+
+* Portfolio: [https://lia-portfolio-site.vercel.app](https://lia-portfolio-site.vercel.app)
+* GitHub: [https://github.com/liabia-ux](https://github.com/liabia-ux)
+
+---
+
+## 💭 Final Thought
+
+> “Most people don’t need more financial information —
+> they need help understanding their behavior.”
+
+
 
 ## Rebuild the model
 
