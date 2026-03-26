@@ -901,17 +901,18 @@ if prompt:
                 stream=True
             )
 
-            full_text = ""
+            full_text_parts = []
 
             def response_generator():
-                nonlocal full_text
                 for chunk in stream:
                     delta = chunk.choices[0].delta.content
                     if delta:
-                        full_text += delta
+                        full_text_parts.append(delta)
                         yield delta
 
             st.write_stream(response_generator())
+
+            full_text = "".join(full_text_parts)
 
             st.session_state.messages.append(
                 {"role": "assistant", "content": full_text}
