@@ -818,4 +818,4 @@ if prompt:
             st.session_state.messages.append(
                 {"role": "assistant", "content": error_message}
             )
-            st.session_state.last_assistant_time = time.time()  st.session_state.last_assistant_time = time.time()
+            st.session_state.last_assistant_time = time.time()
