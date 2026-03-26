@@ -1,3 +1,6 @@
 streamlit
 openai
 streamlit_autorefresh
+sentence-transformers
+scikit-learn
+numpy
