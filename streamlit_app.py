@@ -1,18 +1,23 @@
+import time
+import random
 import streamlit as st
 from openai import OpenAI
+from streamlit_autorefresh import st_autorefresh
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
-    page_title="Finance Coach",
+    page_title="WealthWell",
     page_icon="💸",
     layout="centered"
 )
 
+# ---------------- AUTO REFRESH FOR IDLE FOLLOW-UP ----------------
+# Refresh every 15 seconds while the user is on the page
+st_autorefresh(interval=15000, key="idle_refresh")
+
 # ---------------- TOP TITLE ----------------
 st.markdown("""
 <style>
-
-/* WealthWell Title */
 .wealth-title {
     font-size: 3rem;
     font-weight: 700;
@@ -24,32 +29,13 @@ st.markdown("""
     letter-spacing: 0.5px;
 }
 
-/* Subtitle */
 .wealth-subtitle {
     text-align: center;
     font-size: 1rem;
     color: #7a5c4d;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.2rem;
 }
 
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown('<div class="wealth-title">WealthWell</div>', unsafe_allow_html=True)
-st.markdown(
-    '<div class="wealth-subtitle">Build better money habits. Feel in control of your finances.</div>',
-    unsafe_allow_html=True
-)
-
-# ---------------- CUSTOM CSS ----------------
-st.markdown("""
-<style>
-/* App background */
-.stApp {
-    background: linear-gradient(180deg, #fffaf6 0%, #f7efe8 100%);
-}
-
-/* Section label */
 .sample-label {
     font-weight: 600;
     color: #6b4f3b;
@@ -57,7 +43,10 @@ st.markdown("""
     margin-bottom: 0.6rem;
 }
 
-/* Style all Streamlit buttons like bubbles */
+.stApp {
+    background: linear-gradient(180deg, #fffaf6 0%, #f7efe8 100%);
+}
+
 div.stButton > button {
     width: 100%;
     border-radius: 999px;
@@ -83,25 +72,21 @@ div.stButton > button:active {
     transform: scale(0.98);
 }
 
-/* Chat input */
 [data-testid="stChatInput"] {
     margin-top: 1rem;
 }
 
-/* Container spacing */
 .block-container {
     padding-top: 2rem;
     padding-bottom: 2rem;
 }
 
-/* Chat text */
 [data-testid="stChatMessage"],
 [data-testid="stChatMessageContent"],
 [data-testid="stMarkdownContainer"] p {
     color: #2b2b2b !important;
 }
 
-/* Budget tool styling */
 div[data-testid="stExpander"] {
     border: 1px solid rgba(107, 79, 59, 0.18);
     border-radius: 18px;
@@ -118,7 +103,6 @@ div[data-testid="stMetric"] {
     border-radius: 16px;
 }
 
-/* Reflection card */
 .reflection-card {
     background: rgba(255, 255, 255, 0.45);
     border: 1px solid rgba(107, 79, 59, 0.14);
@@ -145,10 +129,19 @@ div[data-testid="stMetric"] {
     color: #7a6254;
     margin-top: 0.4rem;
 }
+
+.followup-card {
+    background: rgba(255, 255, 255, 0.55);
+    border: 1px solid rgba(107, 79, 59, 0.16);
+    border-radius: 18px;
+    padding: 14px;
+    margin-top: 1rem;
+    color: #5f4637;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- HEADER ----------------
+st.markdown('<div class="wealth-title">WealthWell</div>', unsafe_allow_html=True)
 st.markdown(
     '<div class="wealth-subtitle">Your judgment-free space for smarter money habits.</div>',
     unsafe_allow_html=True
@@ -162,8 +155,8 @@ THERAPY_SYSTEM_PROMPT = (
     "You are WealthWell, a warm and supportive financial wellness chatbot with a financial therapy-inspired tone. "
     "You help users with budgeting, saving, spending habits, emotional spending, financial stress, and money organization. "
     "You are calm, natural, conversational, and non-judgmental. "
-    "Do not sound robotic, overly therapeutic, overly intense, or emotionally heavy unless the user is clearly expressing a money-related struggle. "
-    "If the user sends a simple greeting like 'hi', 'hello', or 'hey', respond briefly and naturally like a normal human assistant. "
+    "Do not sound robotic, overly therapeutic, too intense, or emotionally heavy unless the user is clearly expressing a money-related struggle. "
+    "If the user sends a simple greeting like hi, hello, or hey, respond briefly and naturally like a normal human assistant. "
     "Do not start analyzing their emotions, patterns, or financial behavior unless they actually bring up a financial concern or ask for help. "
     "If the user asks for budgeting or money help, respond with empathy, practical guidance, and gentle reflection when appropriate. "
     "Only validate emotions when emotions are actually present in the user's message. "
@@ -171,9 +164,10 @@ THERAPY_SYSTEM_PROMPT = (
     "If budget fields are empty or zero, do not make assumptions about the user's life or financial state. "
     "You may acknowledge that no budget has been entered yet, but keep it light and practical. "
     "When the user is discussing real financial stress, overspending, avoidance, guilt, or anxiety, respond supportively: "
-    "first acknowledge, then gently identify patterns, then offer small realistic next steps. "
-    "Do not give legal, tax, or investment advice. "
-    "Keep answers concise, natural, and human."
+    "acknowledge briefly, identify a likely pattern simply, then offer one or two small realistic next steps. "
+    "Keep responses fairly short, conversational, and easy to read. "
+    "Avoid long monologues unless the user asks for more detail. "
+    "Do not give legal, tax, or investment advice."
 )
 
 # ---------------- SESSION STATE ----------------
@@ -203,21 +197,30 @@ if "money_mood" not in st.session_state:
 if "reflection_note" not in st.session_state:
     st.session_state.reflection_note = ""
 
+if "last_assistant_time" not in st.session_state:
+    st.session_state.last_assistant_time = None
+
+if "last_user_time" not in st.session_state:
+    st.session_state.last_user_time = None
+
+if "idle_followup_sent_for_turn" not in st.session_state:
+    st.session_state.idle_followup_sent_for_turn = -1
+
 # ---------------- CALLBACK ----------------
 def set_prompt(question: str) -> None:
     st.session_state.selected_prompt = question
 
-# ---------------- HELPER FUNCTIONS ----------------
+# ---------------- HELPERS ----------------
 def is_simple_greeting(text: str) -> bool:
     cleaned = text.strip().lower()
-    simple_greetings = {
+    greetings = {
         "hi", "hello", "hey", "hey there", "hi there",
         "good morning", "good afternoon", "good evening", "yo"
     }
-    return cleaned in simple_greetings
+    return cleaned in greetings
 
-def build_budget_context(budget_data: dict) -> str:
-    total_spending = (
+def budget_summary_values(budget_data: dict):
+    total = (
         budget_data["rent"]
         + budget_data["groceries"]
         + budget_data["transportation"]
@@ -226,7 +229,11 @@ def build_budget_context(budget_data: dict) -> str:
         + budget_data["entertainment"]
         + budget_data["other"]
     )
-    remaining_amount = budget_data["income"] - total_spending
+    remaining = budget_data["income"] - total
+    return total, remaining
+
+def build_budget_context(budget_data: dict) -> str:
+    total_spending, remaining_amount = budget_summary_values(budget_data)
 
     all_zero = (
         budget_data["income"] == 0
@@ -243,8 +250,7 @@ def build_budget_context(budget_data: dict) -> str:
         return (
             "\n\nUser budget context:\n"
             "- No budget data has been entered yet.\n"
-            "Do not infer emotional meaning from this. "
-            "Only mention it if relevant."
+            "Do not infer emotional meaning from this. Mention it only if relevant."
         )
 
     return (
@@ -262,37 +268,31 @@ def build_budget_context(budget_data: dict) -> str:
         "Use this only when relevant."
     )
 
-def budget_summary_values(budget_data: dict):
-    total = (
-        budget_data["rent"]
-        + budget_data["groceries"]
-        + budget_data["transportation"]
-        + budget_data["savings"]
-        + budget_data["dining_out"]
-        + budget_data["entertainment"]
-        + budget_data["other"]
-    )
-    remaining = budget_data["income"] - total
-    return total, remaining
-
 def get_reflection_text(remaining: int | float) -> str:
     if st.session_state.user_budget["income"] == 0:
-        return (
-            "No budget has been added yet. That is completely okay — this can just be a starting point whenever you're ready."
-        )
+        return "No budget has been added yet. That is totally okay — you can start whenever you're ready."
     if remaining < 0:
-        return (
-            "Your current plan is going over your income. That does not mean you failed — it just means your budget may need a few adjustments."
-        )
+        return "Your current plan is over your income, which just means the budget probably needs a few adjustments."
     if remaining == 0:
-        return (
-            "Your budget is currently balanced to your income. That can be a really useful starting point for getting clarity."
-        )
-    return (
-        "You currently have money left after your planned spending, which can give you room for savings, flexibility, or a buffer."
-    )
+        return "Your budget is currently balanced to your income. That is a solid starting point."
+    return "You currently have money left after your planned spending, which can give you a little flexibility or buffer."
 
-# ---------------- SIDEBAR BUDGET TOOL ----------------
+def append_hidden_user_message(prompt: str, enriched_prompt: str) -> list:
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    temp_messages = st.session_state.messages.copy()
+    temp_messages[-1] = {"role": "user", "content": enriched_prompt}
+    return temp_messages
+
+def get_idle_followup() -> str:
+    options = [
+        "No rush — would it help if we kept it really simple and just started with income and essentials?",
+        "Take your time. We can break this into one small step if that feels easier.",
+        "You do not need to figure it all out at once. Want to start with just a basic monthly budget?",
+        "If it helps, we can make this super simple together — income, bills, savings, then spending."
+    ]
+    return random.choice(options)
+
+# ---------------- SIDEBAR ----------------
 with st.sidebar:
     st.markdown("### 💰 Budget Planner")
 
@@ -300,56 +300,16 @@ with st.sidebar:
         col1, col2 = st.columns(2)
 
         with col1:
-            income = st.number_input(
-                "Income",
-                min_value=0,
-                step=50,
-                value=st.session_state.user_budget["income"]
-            )
-            rent = st.number_input(
-                "Rent",
-                min_value=0,
-                step=50,
-                value=st.session_state.user_budget["rent"]
-            )
-            groceries = st.number_input(
-                "Groceries",
-                min_value=0,
-                step=25,
-                value=st.session_state.user_budget["groceries"]
-            )
-            transportation = st.number_input(
-                "Transport",
-                min_value=0,
-                step=25,
-                value=st.session_state.user_budget["transportation"]
-            )
+            income = st.number_input("Income", min_value=0, step=50, value=st.session_state.user_budget["income"])
+            rent = st.number_input("Rent", min_value=0, step=50, value=st.session_state.user_budget["rent"])
+            groceries = st.number_input("Groceries", min_value=0, step=25, value=st.session_state.user_budget["groceries"])
+            transportation = st.number_input("Transport", min_value=0, step=25, value=st.session_state.user_budget["transportation"])
 
         with col2:
-            savings = st.number_input(
-                "Savings",
-                min_value=0,
-                step=25,
-                value=st.session_state.user_budget["savings"]
-            )
-            dining_out = st.number_input(
-                "Dining",
-                min_value=0,
-                step=25,
-                value=st.session_state.user_budget["dining_out"]
-            )
-            entertainment = st.number_input(
-                "Fun",
-                min_value=0,
-                step=25,
-                value=st.session_state.user_budget["entertainment"]
-            )
-            other = st.number_input(
-                "Other",
-                min_value=0,
-                step=25,
-                value=st.session_state.user_budget["other"]
-            )
+            savings = st.number_input("Savings", min_value=0, step=25, value=st.session_state.user_budget["savings"])
+            dining_out = st.number_input("Dining", min_value=0, step=25, value=st.session_state.user_budget["dining_out"])
+            entertainment = st.number_input("Fun", min_value=0, step=25, value=st.session_state.user_budget["entertainment"])
+            other = st.number_input("Other", min_value=0, step=25, value=st.session_state.user_budget["other"])
 
         if st.button("Save Budget"):
             st.session_state.user_budget = {
@@ -380,6 +340,14 @@ with st.sidebar:
     )
     st.session_state.money_mood = mood
 
+    reflection_input = st.text_area(
+        "Optional reflection",
+        value=st.session_state.reflection_note,
+        placeholder="Example: I spend more on takeout when I’m stressed.",
+        height=100
+    )
+    st.session_state.reflection_note = reflection_input
+
     st.markdown(
         f"""
         <div class="reflection-card">
@@ -391,15 +359,7 @@ with st.sidebar:
         unsafe_allow_html=True
     )
 
-    reflection_input = st.text_area(
-        "Optional reflection",
-        value=st.session_state.reflection_note,
-        placeholder="Example: I spend more on takeout when I’m stressed.",
-        height=100
-    )
-    st.session_state.reflection_note = reflection_input
-
-# ---------------- CLICKABLE BUBBLES ----------------
+# ---------------- EXAMPLE BUBBLES ----------------
 st.markdown('<div class="sample-label">Try one of these</div>', unsafe_allow_html=True)
 
 sample_questions = [
@@ -421,13 +381,32 @@ for i in range(0, len(sample_questions), 2):
                     args=(sample_questions[i + j],)
                 )
 
-# ---------------- DISPLAY CHAT HISTORY ----------------
+# ---------------- SHOW CHAT HISTORY ----------------
 for message in st.session_state.messages[1:]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# ---------------- INPUT LOGIC ----------------
-typed_prompt = st.chat_input("Ask me about budgeting, saving, or spending habits...")
+# ---------------- IDLE FOLLOW-UP ----------------
+assistant_count = sum(1 for m in st.session_state.messages if m["role"] == "assistant")
+user_count = sum(1 for m in st.session_state.messages if m["role"] == "user")
+
+if (
+    st.session_state.last_assistant_time is not None
+    and assistant_count > 0
+    and assistant_count > st.session_state.idle_followup_sent_for_turn
+):
+    seconds_since_assistant = time.time() - st.session_state.last_assistant_time
+    user_has_not_replied_yet = user_count < assistant_count
+
+    if seconds_since_assistant >= 45 and user_has_not_replied_yet:
+        followup_text = get_idle_followup()
+        with st.chat_message("assistant"):
+            st.markdown(followup_text)
+        st.session_state.messages.append({"role": "assistant", "content": followup_text})
+        st.session_state.idle_followup_sent_for_turn = assistant_count
+
+# ---------------- INPUT ----------------
+typed_prompt = st.chat_input("What’s on your mind about money right now?")
 
 prompt = None
 if st.session_state.selected_prompt:
@@ -438,35 +417,36 @@ elif typed_prompt:
 
 # ---------------- RESPONSE LOGIC ----------------
 if prompt:
-    budget_context = build_budget_context(st.session_state.user_budget)
+    st.session_state.last_user_time = time.time()
 
+    budget_context = build_budget_context(st.session_state.user_budget)
     emotion_context = (
         "\n\nUser emotional context:\n"
         f"- Current money mood: {st.session_state.money_mood}\n"
         f"- Reflection note: {st.session_state.reflection_note if st.session_state.reflection_note.strip() else 'No reflection provided.'}\n"
-        "Use this emotional context only when the user's message is actually about money stress, guilt, avoidance, overspending, or emotional difficulty."
+        "Use this only when the message is actually about money stress, guilt, avoidance, overspending, or emotional difficulty."
     )
 
     if is_simple_greeting(prompt):
         enriched_prompt = (
             f"{prompt}\n\n"
-            "The user is only greeting you. "
-            "Respond naturally, warmly, and briefly. "
-            "Do not provide budgeting advice, emotional analysis, or financial therapy language unless the user asks for help."
+            "The user is only greeting you. Respond warmly, naturally, and briefly. "
+            "Do not provide financial advice or emotional analysis unless they ask for help."
         )
     else:
         enriched_prompt = (
             f"{prompt}\n\n"
-            "Respond naturally and use good judgment. "
+            "Respond naturally and conversationally. "
+            "Keep the response fairly short. "
             "Only use a financial therapy style if the user is actually expressing a money problem, emotional stress, guilt, anxiety, avoidance, or overspending pattern. "
-            "If the user is simply asking an informational budgeting question, be warm but straightforward. "
+            "If the user is asking a straightforward budgeting question, be warm but direct. "
             "Do not overanalyze neutral messages. "
-            "If useful, include one small next step. "
+            "If useful, include one small next step."
             f"{budget_context}"
             f"{emotion_context}"
         )
 
-    st.session_state.messages.append({"role": "user", "content": enriched_prompt})
+    temp_messages = append_hidden_user_message(prompt, enriched_prompt)
 
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -475,8 +455,8 @@ if prompt:
         try:
             stream = client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=st.session_state.messages,
-                temperature=0.7,
+                messages=temp_messages,
+                temperature=0.65,
                 stream=True
             )
 
@@ -491,6 +471,7 @@ if prompt:
                 st.session_state.messages.append(
                     {"role": "assistant", "content": full_text}
                 )
+                st.session_state.last_assistant_time = time.time()
 
             st.write_stream(response_generator())
 
@@ -500,3 +481,4 @@ if prompt:
             st.session_state.messages.append(
                 {"role": "assistant", "content": error_message}
             )
+            st.session_state.last_assistant_time = time.time()
