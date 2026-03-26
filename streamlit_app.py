@@ -49,20 +49,6 @@ st.markdown("""
     background: linear-gradient(180deg, #fffaf6 0%, #f7efe8 100%);
 }
 
-/* Title area */
-.main-title {
-    font-size: 2.3rem;
-    font-weight: 700;
-    color: #5c4033;
-    margin-bottom: 0.2rem;
-}
-
-.sub-title {
-    color: #7a5c4d;
-    font-size: 1rem;
-    margin-bottom: 1.2rem;
-}
-
 /* Section label */
 .sample-label {
     font-weight: 600;
@@ -102,35 +88,17 @@ div.stButton > button:active {
     margin-top: 1rem;
 }
 
-/* Optional container softness */
+/* Container spacing */
 .block-container {
     padding-top: 2rem;
     padding-bottom: 2rem;
 }
 
-/* Fix chat text color */
-[data-testid="stChatMessage"] {
-    color: #2b2b2b !important;
-}
-
-/* Force markdown text inside chat */
+/* Chat text */
+[data-testid="stChatMessage"],
+[data-testid="stChatMessageContent"],
 [data-testid="stMarkdownContainer"] p {
     color: #2b2b2b !important;
-}
-
-/* User + assistant text specifically */
-[data-testid="stChatMessageContent"] {
-    color: #2b2b2b !important;
-}
-
-/* Optional: make assistant slightly darker */
-[data-testid="stChatMessage"][aria-label="assistant"] {
-    color: #1f1f1f !important;
-}
-
-/* Optional: make user text slightly different tone */
-[data-testid="stChatMessage"][aria-label="user"] {
-    color: #3a3a3a !important;
 }
 
 /* Budget tool styling */
@@ -191,34 +159,27 @@ client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # ---------------- SYSTEM PROMPT ----------------
 THERAPY_SYSTEM_PROMPT = (
-    "You are WealthWell, a supportive financial therapy-style chatbot. "
-    "Your role is to help users understand both their money habits and the emotions, stress, fears, and patterns connected to them. "
-    "You are warm, calm, validating, reflective, and non-judgmental. "
-    "You help users with budgeting, overspending, saving, financial anxiety, avoidance, guilt, shame, impulse spending, and money organization. "
-    "You do not shame users for mistakes. You normalize that money can be emotional and deeply personal. "
-    "You respond like a compassionate financial wellness coach with a therapeutic tone, but you are not a licensed therapist and should not claim to provide mental health therapy. "
+    "You are WealthWell, a warm and supportive financial wellness chatbot with a financial therapy-inspired tone. "
+    "You help users with budgeting, saving, spending habits, emotional spending, financial stress, and money organization. "
+    "You are calm, natural, conversational, and non-judgmental. "
+    "Do not sound robotic, overly therapeutic, overly intense, or emotionally heavy unless the user is clearly expressing a money-related struggle. "
+    "If the user sends a simple greeting like 'hi', 'hello', or 'hey', respond briefly and naturally like a normal human assistant. "
+    "Do not start analyzing their emotions, patterns, or financial behavior unless they actually bring up a financial concern or ask for help. "
+    "If the user asks for budgeting or money help, respond with empathy, practical guidance, and gentle reflection when appropriate. "
+    "Only validate emotions when emotions are actually present in the user's message. "
+    "Do not force emotional interpretation onto neutral messages. "
+    "If budget fields are empty or zero, do not make assumptions about the user's life or financial state. "
+    "You may acknowledge that no budget has been entered yet, but keep it light and practical. "
+    "When the user is discussing real financial stress, overspending, avoidance, guilt, or anxiety, respond supportively: "
+    "first acknowledge, then gently identify patterns, then offer small realistic next steps. "
     "Do not give legal, tax, or investment advice. "
-    "When users share money struggles, first acknowledge the emotional experience, then gently help them reflect on patterns, and then offer practical next steps. "
-    "When helpful, ask thoughtful follow-up questions such as what usually triggers the spending, what money meant growing up, what feeling they are trying to solve in the moment, or what financial situation feels most overwhelming right now. "
-    "When users ask for budgeting help, combine emotional support with practical structure. "
-    "Use realistic budget breakdowns across categories like rent, groceries, transportation, debt payments, savings, dining out, entertainment, and other essentials. "
-    "Keep responses conversational, grounded, and easy to follow. "
-    "Avoid sounding robotic, overly corporate, or purely instructional. "
-    "Prioritize emotional safety, clarity, and small actionable steps. "
-    "If the user shares a budget, help them interpret it gently and without judgment. "
-    "Frame progress as sustainable habit-building, not perfection. "
-    "Keep answers concise but caring unless the user asks for more detail. "
-    "If the user seems emotionally overwhelmed about money, slow down the tone, validate them first, and avoid sounding clinical. "
-    "If the user asks for a plan, give a simple plan with small doable steps."
+    "Keep answers concise, natural, and human."
 )
 
 # ---------------- SESSION STATE ----------------
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {
-            "role": "system",
-            "content": THERAPY_SYSTEM_PROMPT
-        }
+        {"role": "system", "content": THERAPY_SYSTEM_PROMPT}
     ]
 
 if "selected_prompt" not in st.session_state:
@@ -247,6 +208,14 @@ def set_prompt(question: str) -> None:
     st.session_state.selected_prompt = question
 
 # ---------------- HELPER FUNCTIONS ----------------
+def is_simple_greeting(text: str) -> bool:
+    cleaned = text.strip().lower()
+    simple_greetings = {
+        "hi", "hello", "hey", "hey there", "hi there",
+        "good morning", "good afternoon", "good evening", "yo"
+    }
+    return cleaned in simple_greetings
+
 def build_budget_context(budget_data: dict) -> str:
     total_spending = (
         budget_data["rent"]
@@ -258,6 +227,25 @@ def build_budget_context(budget_data: dict) -> str:
         + budget_data["other"]
     )
     remaining_amount = budget_data["income"] - total_spending
+
+    all_zero = (
+        budget_data["income"] == 0
+        and budget_data["rent"] == 0
+        and budget_data["groceries"] == 0
+        and budget_data["transportation"] == 0
+        and budget_data["savings"] == 0
+        and budget_data["dining_out"] == 0
+        and budget_data["entertainment"] == 0
+        and budget_data["other"] == 0
+    )
+
+    if all_zero:
+        return (
+            "\n\nUser budget context:\n"
+            "- No budget data has been entered yet.\n"
+            "Do not infer emotional meaning from this. "
+            "Only mention it if relevant."
+        )
 
     return (
         "\n\nUser budget context:\n"
@@ -271,8 +259,7 @@ def build_budget_context(budget_data: dict) -> str:
         f"- Other: ${budget_data['other']}\n"
         f"- Total planned monthly outflow: ${total_spending}\n"
         f"- Remaining amount: ${remaining_amount}\n"
-        "Use this context only when relevant. "
-        "If the budget is all zeros, do not over-focus on it."
+        "Use this only when relevant."
     )
 
 def budget_summary_values(budget_data: dict):
@@ -291,22 +278,18 @@ def budget_summary_values(budget_data: dict):
 def get_reflection_text(remaining: int | float) -> str:
     if st.session_state.user_budget["income"] == 0:
         return (
-            "You have not added a budget yet, and that is completely okay. "
-            "A budget can simply be a starting point for awareness, not a test you have to pass."
+            "No budget has been added yet. That is completely okay — this can just be a starting point whenever you're ready."
         )
     if remaining < 0:
         return (
-            "Your current plan is going over your monthly income. That does not mean you failed. "
-            "It may just be showing that your budget needs support, tradeoffs, or gentler adjustments."
+            "Your current plan is going over your income. That does not mean you failed — it just means your budget may need a few adjustments."
         )
     if remaining == 0:
         return (
-            "Your budget is currently balanced exactly to your income. "
-            "That can be a useful starting point, especially if you want a clearer picture of where everything is going."
+            "Your budget is currently balanced to your income. That can be a really useful starting point for getting clarity."
         )
     return (
-        "You currently have some money left after your planned spending. "
-        "That can create room for breathing space, savings, or a small buffer for unexpected expenses."
+        "You currently have money left after your planned spending, which can give you room for savings, flexibility, or a buffer."
     )
 
 # ---------------- SIDEBAR BUDGET TOOL ----------------
@@ -389,12 +372,11 @@ with st.sidebar:
     st.metric("Remaining", f"${remaining:,}")
 
     st.markdown("#### 🌿 Money Check-In")
+    mood_options = ["Calm", "Anxious", "Overwhelmed", "Guilty", "Hopeful", "Avoiding it", "Neutral"]
     mood = st.selectbox(
         "How are you feeling about money today?",
-        ["Calm", "Anxious", "Overwhelmed", "Guilty", "Hopeful", "Avoiding it", "Neutral"],
-        index=["Calm", "Anxious", "Overwhelmed", "Guilty", "Hopeful", "Avoiding it", "Neutral"].index(
-            st.session_state.money_mood
-        ) if st.session_state.money_mood in ["Calm", "Anxious", "Overwhelmed", "Guilty", "Hopeful", "Avoiding it", "Neutral"] else 6
+        mood_options,
+        index=mood_options.index(st.session_state.money_mood) if st.session_state.money_mood in mood_options else 6
     )
     st.session_state.money_mood = mood
 
@@ -412,21 +394,19 @@ with st.sidebar:
     reflection_input = st.text_area(
         "Optional reflection",
         value=st.session_state.reflection_note,
-        placeholder="Example: I feel like I lose control with food delivery when I’m stressed.",
+        placeholder="Example: I spend more on takeout when I’m stressed.",
         height=100
     )
     st.session_state.reflection_note = reflection_input
 
-# ---------------- STARTER QUESTIONS ----------------
-st.markdown('<div class="sample-label">Sample questions</div>', unsafe_allow_html=True)
+# ---------------- CLICKABLE BUBBLES ----------------
+st.markdown('<div class="sample-label">Try one of these</div>', unsafe_allow_html=True)
 
 sample_questions = [
-    "How do I start budgeting if I’ve never made one before?",
     "Help me create a simple monthly budget.",
     "Why do I keep impulse spending and how can I stop?",
-    "What percentage of my income should go to rent?",
-    "How should I divide my money between needs, wants, and savings?",
-    "Can you help me figure out a grocery budget?",
+    "I feel anxious every time I look at my bank account.",
+    "Can you help me build a plan for when I want to stress spend?",
 ]
 
 for i in range(0, len(sample_questions), 2):
@@ -439,50 +419,6 @@ for i in range(0, len(sample_questions), 2):
                     key=f"sample_q_{i+j}",
                     on_click=set_prompt,
                     args=(sample_questions[i + j],)
-                )
-
-# ---------------- FEELING CHECK-IN BUBBLES ----------------
-st.markdown('<div class="sample-label">Money feelings check-in</div>', unsafe_allow_html=True)
-
-feeling_questions = [
-    "I feel anxious every time I look at my bank account.",
-    "I avoid budgeting because it makes me feel bad.",
-    "I keep spending when I’m stressed or overwhelmed.",
-    "I feel guilty after I spend money on myself.",
-]
-
-for i in range(0, len(feeling_questions), 2):
-    cols = st.columns(2)
-    for j in range(2):
-        if i + j < len(feeling_questions):
-            with cols[j]:
-                st.button(
-                    feeling_questions[i + j],
-                    key=f"feeling_q_{i+j}",
-                    on_click=set_prompt,
-                    args=(feeling_questions[i + j],)
-                )
-
-# ---------------- SPENDING TRIGGER BUBBLES ----------------
-st.markdown('<div class="sample-label">Gentle spending trigger prompts</div>', unsafe_allow_html=True)
-
-trigger_questions = [
-    "Can you help me figure out what triggers my overspending?",
-    "I think boredom is making me spend more than I want.",
-    "How do I pause before emotional spending?",
-    "Can you help me build a plan for when I want to stress spend?",
-]
-
-for i in range(0, len(trigger_questions), 2):
-    cols = st.columns(2)
-    for j in range(2):
-        if i + j < len(trigger_questions):
-            with cols[j]:
-                st.button(
-                    trigger_questions[i + j],
-                    key=f"trigger_q_{i+j}",
-                    on_click=set_prompt,
-                    args=(trigger_questions[i + j],)
                 )
 
 # ---------------- DISPLAY CHAT HISTORY ----------------
@@ -508,18 +444,27 @@ if prompt:
         "\n\nUser emotional context:\n"
         f"- Current money mood: {st.session_state.money_mood}\n"
         f"- Reflection note: {st.session_state.reflection_note if st.session_state.reflection_note.strip() else 'No reflection provided.'}\n"
-        "Use this emotional context when relevant, especially if the user is discussing stress, guilt, avoidance, or emotional spending."
+        "Use this emotional context only when the user's message is actually about money stress, guilt, avoidance, overspending, or emotional difficulty."
     )
 
-    enriched_prompt = (
-        f"{prompt}\n\n"
-        "Please respond in a financial therapy style. "
-        "That means: validate emotions first, gently identify patterns second, then give practical money guidance third. "
-        "Be warm, non-judgmental, concise, and helpful. "
-        "If useful, include one small reflection question and one realistic next step."
-        f"{budget_context}"
-        f"{emotion_context}"
-    )
+    if is_simple_greeting(prompt):
+        enriched_prompt = (
+            f"{prompt}\n\n"
+            "The user is only greeting you. "
+            "Respond naturally, warmly, and briefly. "
+            "Do not provide budgeting advice, emotional analysis, or financial therapy language unless the user asks for help."
+        )
+    else:
+        enriched_prompt = (
+            f"{prompt}\n\n"
+            "Respond naturally and use good judgment. "
+            "Only use a financial therapy style if the user is actually expressing a money problem, emotional stress, guilt, anxiety, avoidance, or overspending pattern. "
+            "If the user is simply asking an informational budgeting question, be warm but straightforward. "
+            "Do not overanalyze neutral messages. "
+            "If useful, include one small next step. "
+            f"{budget_context}"
+            f"{emotion_context}"
+        )
 
     st.session_state.messages.append({"role": "user", "content": enriched_prompt})
 
@@ -531,7 +476,7 @@ if prompt:
             stream = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=st.session_state.messages,
-                temperature=0.8,
+                temperature=0.7,
                 stream=True
             )
 
