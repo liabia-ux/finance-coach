@@ -477,8 +477,6 @@ OFF_TOPIC_PATTERNS = [
     r"\bpolitics\b",
     r"\belection\b",
     r"\brecipe\b",
-    r"\brelationship\b",
-    r"\bdating\b",
     r"\bmedical\b",
     r"\bdiagnosis\b",
     r"\bessay\b",
@@ -504,6 +502,26 @@ SHORT_CONFIRMATIONS = {
     "i am", "i do", "okay", "ok", "yes please", "sounds good", "please"
 }
 
+FOLLOWUP_REFERENCE_PATTERNS = [
+    r"\bstep\s*\d+\b",
+    r"\bthe first one\b",
+    r"\bthe second one\b",
+    r"\bthe third one\b",
+    r"\bthe last one\b",
+    r"\bthat resonates\b",
+    r"\bthose resonate\b",
+    r"\bthat helps\b",
+    r"\bthose help\b",
+    r"\bthat makes sense\b",
+    r"\bthose make sense\b",
+    r"\bi relate to that\b",
+    r"\bi relate to those\b",
+    r"\bthat feels true\b",
+    r"\bthose feel true\b",
+    r"\byes, especially\b",
+    r"\bespecially step\b"
+]
+
 def is_simple_greeting(text: str) -> bool:
     cleaned = text.strip().lower()
     greetings = {
@@ -512,35 +530,80 @@ def is_simple_greeting(text: str) -> bool:
     }
     return cleaned in greetings
 
-def last_assistant_asked_money_redirect() -> bool:
+def get_recent_non_system_messages(limit=10):
+    return [m for m in st.session_state.messages if m["role"] != "system"][-limit:]
+
+def last_assistant_message() -> str:
     for msg in reversed(st.session_state.messages):
         if msg["role"] == "assistant":
-            content = msg["content"].lower()
-            trigger_phrases = [
-                "is there a money-related part of this for you",
-                "are you feeling overwhelmed about money",
-                "if this ties into money",
-                "i’m here specifically for financial therapy and money-related support",
-                "i'm here specifically for financial therapy and money-related support"
-            ]
-            return any(phrase in content for phrase in trigger_phrases)
-    return False
+            return msg["content"].lower()
+    return ""
+
+def last_assistant_asked_money_redirect() -> bool:
+    content = last_assistant_message()
+    trigger_phrases = [
+        "is there a money-related part of this for you",
+        "are you feeling overwhelmed about money",
+        "if this ties into money",
+        "i’m here specifically for financial therapy and money-related support",
+        "i'm here specifically for financial therapy and money-related support"
+    ]
+    return any(phrase in content for phrase in trigger_phrases)
 
 def recent_conversation_is_money_related() -> bool:
-    recent_messages = st.session_state.messages[-6:]
-    combined = " ".join(msg["content"].lower() for msg in recent_messages if msg["role"] != "system")
-    return any(word in combined for word in FINANCE_KEYWORDS) or any(word in combined for word in SOFT_EMOTION_WORDS)
+    recent_messages = get_recent_non_system_messages(limit=10)
+    combined = " ".join(msg["content"].lower() for msg in recent_messages)
+
+    finance_hit = any(word in combined for word in FINANCE_KEYWORDS)
+    emotion_hit = any(word in combined for word in SOFT_EMOTION_WORDS)
+
+    assistant_has_money_plan = any(
+        msg["role"] == "assistant" and (
+            "stress spend" in msg["content"].lower()
+            or "impulse" in msg["content"].lower()
+            or "budget" in msg["content"].lower()
+            or "money" in msg["content"].lower()
+            or "spending" in msg["content"].lower()
+            or "identify triggers" in msg["content"].lower()
+            or "waiting period" in msg["content"].lower()
+        )
+        for msg in recent_messages
+    )
+
+    return finance_hit or emotion_hit or assistant_has_money_plan
 
 def is_followup_confirmation(text: str) -> bool:
     cleaned = text.strip().lower()
     return cleaned in SHORT_CONFIRMATIONS
 
+def is_contextual_followup(text: str) -> bool:
+    lower = text.strip().lower()
+
+    if any(re.search(pattern, lower) for pattern in FOLLOWUP_REFERENCE_PATTERNS):
+        return recent_conversation_is_money_related()
+
+    if len(lower.split()) <= 14 and recent_conversation_is_money_related():
+        conversational_followups = [
+            "that one", "those", "that", "this", "i relate", "same",
+            "me too", "especially", "exactly", "yes", "honestly"
+        ]
+        if any(phrase in lower for phrase in conversational_followups):
+            return True
+
+    return False
+
 def is_short_continuation(text: str) -> bool:
     lower = text.strip().lower()
+
     if lower in SHORT_CONFIRMATIONS:
         return True
-    if len(lower.split()) <= 5 and recent_conversation_is_money_related():
+
+    if is_contextual_followup(lower):
         return True
+
+    if len(lower.split()) <= 10 and recent_conversation_is_money_related():
+        return True
+
     return False
 
 def is_finance_related(text: str) -> bool:
@@ -550,6 +613,9 @@ def is_finance_related(text: str) -> bool:
         return True
 
     if last_assistant_asked_money_redirect() and is_followup_confirmation(lower):
+        return True
+
+    if is_contextual_followup(lower):
         return True
 
     if is_short_continuation(lower) and recent_conversation_is_money_related():
@@ -562,13 +628,13 @@ def is_finance_related(text: str) -> bool:
     if keyword_hit or phrase_hit:
         return True
 
-    if off_topic_hit:
+    if off_topic_hit and not recent_conversation_is_money_related():
         return False
 
     if any(word in lower for word in SOFT_EMOTION_WORDS) and recent_conversation_is_money_related():
         return True
 
-    return False
+    return recent_conversation_is_money_related() and len(lower.split()) <= 14
 
 def off_topic_response(user_text: str) -> str:
     lower = user_text.lower().strip()
@@ -580,54 +646,9 @@ def off_topic_response(user_text: str) -> str:
         )
 
     return (
-        "I might not be the best for that exact topic, but if this ties into money, budgeting, "
-        "spending, debt, or financial stress, I’d be glad to help. What part feels most connected to money?"
+        "I’m here specifically for money, budgeting, spending habits, debt, and financial stress. "
+        "If you want, tell me what’s happening financially and I’ll help you work through it."
     )
-
-def expand_short_followup(prompt: str) -> str:
-    lower = prompt.strip().lower()
-
-    if last_assistant_asked_money_redirect() and is_followup_confirmation(lower):
-        return (
-            "The user confirmed that this does relate to money. "
-            "Respond warmly and naturally. "
-            "Do not repeat the redirect. "
-            "Ask one gentle, specific follow-up question to help them open up about what is going on financially."
-        )
-
-    if lower in {"no", "not really", "nope"} and last_assistant_asked_money_redirect():
-        return (
-            "The user said this is not about money. "
-            "Briefly and kindly explain that you can only help with financial therapy and money-related support."
-        )
-
-    if is_short_continuation(lower) and recent_conversation_is_money_related():
-        return (
-            "The user gave a short continuation in an ongoing money-related conversation. "
-            "Respond naturally and continue the thread without restarting it."
-        )
-
-    return prompt
-
-def user_is_still_distressed(text: str) -> bool:
-    lower = text.lower().strip()
-    distress_patterns = [
-        "still stressed",
-        "still anxious",
-        "still overwhelmed",
-        "still worried",
-        "but i'm still",
-        "but im still",
-        "i'm still stressed",
-        "im still stressed",
-        "i'm still anxious",
-        "im still anxious",
-        "still really stressed",
-        "still feel stressed",
-        "still feel anxious"
-    ]
-    return any(p in lower for p in distress_patterns)
-
 # ---------------- HELPERS ----------------
 def budget_summary_values(budget_data: dict):
     total = (
