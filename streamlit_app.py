@@ -15,7 +15,7 @@ st.set_page_config(
 # ---------------- AUTO REFRESH FOR IDLE FOLLOW-UP ----------------
 st_autorefresh(interval=15000, key="idle_refresh")
 
-# ---------------- STYLES ----------------
+# ---------------- TOP TITLE + STYLES ----------------
 st.markdown("""
 <style>
 .wealth-title {
@@ -139,6 +139,7 @@ div[data-testid="stMetric"] {
     color: #5f4637;
 }
 
+/* -------- SIDEBAR FIXES -------- */
 section[data-testid="stSidebar"] {
     background: #232634 !important;
 }
@@ -212,45 +213,68 @@ client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # ---------------- SYSTEM PROMPT ----------------
 THERAPY_SYSTEM_PROMPT = """
-You are WealthWell, a warm financial therapy and money support chatbot.
+You are WealthWell, a financial therapy bot.
 
-Your focus is:
+Your role is strictly limited to helping with:
 - budgeting
-- savings
-- emotional spending
-- stress spending
-- impulse spending
+- saving
 - overspending
+- impulse spending
+- stress spending
+- emotional spending
 - money anxiety
 - financial avoidance
 - debt stress
-- bill planning
 - paycheck planning
+- expense planning
+- financial goal setting
+- money habits
 - financial organization
-- practical financial wellness support
+- financial wellness support
 
-Your tone should feel:
+You must ONLY respond to topics directly related to personal finance, money behavior, or financial therapy.
+
+Do NOT answer questions about:
+- coding
+- schoolwork unrelated to finance
+- relationships unless directly tied to money
+- health or mental health outside financial stress
+- entertainment
+- current events
+- politics
+- sports
+- history
+- technology unrelated to finance
+- travel
+- recipes
+- general trivia
+- any topic outside money or financial therapy
+
+If the user asks something outside your scope:
+- do not answer the off-topic question
+- briefly and warmly redirect toward money-related support
+- if the user sounds emotionally overwhelmed, gently ask whether it is about money
+
+Tone:
 - warm
 - calm
-- emotionally safe
-- natural
+- grounded
+- human
 - conversational
 - non-judgmental
-- supportive without sounding clinical
 
-Important behavior:
-- Stay centered on money, spending, budgeting, debt, saving, and financial stress.
-- Do not answer unrelated topics in depth.
-- But do allow natural human conversation flow.
-- If the user is clearly continuing a money-related conversation, respond naturally even if their message is short.
-- Do not sound like a compliance bot.
-- Do not overuse phrases like "I'm only here for..."
-- If something is off-topic, gently redirect with warmth.
-- If the user sounds emotional, acknowledge briefly in human language.
-- Ask at most one follow-up question.
-- Keep replies concise to medium length.
-- Do not overanalyze simple messages.
-- Do not give legal, tax, or investment advice.
+Behavior rules:
+- do not sound robotic
+- do not overanalyze neutral messages
+- do not force emotional meaning onto simple messages
+- if the user sounds emotional, acknowledge briefly, reflect simply, and ask at most one gentle follow-up question
+- if the user asks for direct financial help, answer clearly and practically
+- keep responses concise to medium length
+- avoid long monologues unless the user asks for more
+- do not give legal, tax, or investment advice
+- in each reply, anchor to the user's most recent message
+- if the user is reacting to a prior suggestion, address that reaction before offering anything new
+- do not repeat the same advice with slightly different wording
 """
 
 # ---------------- SESSION STATE ----------------
@@ -304,16 +328,35 @@ if "conversation_memory" not in st.session_state:
 def set_prompt(question: str) -> None:
     st.session_state.selected_prompt = question
 
-# ---------------- CLASSIFIERS ----------------
+# ---------------- FINANCE LOCK ----------------
 FINANCE_KEYWORDS = [
     "money", "finance", "financial", "budget", "budgeting", "save", "saving",
     "savings", "spend", "spending", "overspending", "impulse spending",
     "stress spending", "debt", "loan", "credit", "credit card", "bill",
     "bills", "income", "expenses", "expense", "rent", "groceries",
     "transportation", "emergency fund", "paycheck", "paycheck to paycheck",
-    "bank account", "banking", "afford", "payment", "payments", "cash flow",
-    "money anxiety", "financial stress", "money habits", "financial goals",
-    "shopping", "takeout", "impulse buy", "financial plan", "financial wellness"
+    "bank account", "banking", "afford", "affordable", "payment", "payments",
+    "cash flow", "financial stress", "money anxiety", "money habits",
+    "financial goals", "save more", "spend less", "shopping", "takeout",
+    "overspend", "impulse buy", "financial plan", "financial wellness"
+]
+
+FINANCE_THERAPY_PHRASES = [
+    "i feel anxious when i check my account",
+    "i keep impulse buying",
+    "i overspend",
+    "i stress spend",
+    "i avoid checking my bank account",
+    "i feel guilty after spending",
+    "help me make a plan",
+    "help me make a budget",
+    "i spend too much",
+    "i feel bad about money",
+    "i'm behind on bills",
+    "i am behind on bills",
+    "i keep spending when i'm stressed",
+    "why do i spend when i'm stressed",
+    "why do i keep spending"
 ]
 
 OFF_TOPIC_PATTERNS = [
@@ -325,114 +368,158 @@ OFF_TOPIC_PATTERNS = [
     r"\bpolitics\b",
     r"\belection\b",
     r"\brecipe\b",
+    r"\brelationship\b",
+    r"\bdating\b",
+    r"\bmedical\b",
+    r"\bdiagnosis\b",
+    r"\bessay\b",
+    r"\bhomework\b",
+    r"\bpython code\b",
     r"\bcoding\b",
     r"\bprogramming\b",
-    r"\bpython code\b",
+    r"\bhistory\b",
+    r"\bscience\b",
     r"\btravel\b",
     r"\bvacation\b",
     r"\bgame\b",
-    r"\bgames\b",
-    r"\bhistory\b",
-    r"\bscience\b"
+    r"\bgames\b"
 ]
 
-EMOTION_WORDS = [
-    "anxious", "anxiety", "overwhelmed", "stressed", "stress", "guilty",
-    "ashamed", "worried", "avoiding", "avoid", "behind", "struggling",
-    "panic", "scared", "afraid", "embarrassed"
+SOFT_EMOTION_WORDS = [
+    "overwhelmed", "stressed", "anxious", "worried", "guilty",
+    "ashamed", "lost", "confused", "behind", "struggling", "panic"
 ]
 
 SHORT_CONFIRMATIONS = {
-    "yes", "yeah", "yep", "yup", "sure", "okay", "ok", "yes please",
-    "please", "sounds good", "let's do it", "lets do it", "i do", "i am"
+    "yes", "yeah", "yep", "yup", "sure", "it is", "kind of", "a little",
+    "i am", "i do", "okay", "ok", "yes please", "sounds good", "please"
 }
 
 def is_simple_greeting(text: str) -> bool:
     cleaned = text.strip().lower()
     greetings = {
         "hi", "hello", "hey", "hey there", "hi there",
-        "good morning", "good afternoon", "good evening"
+        "good morning", "good afternoon", "good evening", "yo"
     }
     return cleaned in greetings
+
+def last_assistant_asked_money_redirect() -> bool:
+    for msg in reversed(st.session_state.messages):
+        if msg["role"] == "assistant":
+            content = msg["content"].lower()
+            trigger_phrases = [
+                "is there a money-related part of this for you",
+                "are you feeling overwhelmed about money",
+                "if this ties into money",
+                "i’m here specifically for financial therapy and money-related support",
+                "i'm here specifically for financial therapy and money-related support"
+            ]
+            return any(phrase in content for phrase in trigger_phrases)
+    return False
 
 def recent_conversation_is_money_related() -> bool:
     recent_messages = st.session_state.messages[-6:]
     combined = " ".join(msg["content"].lower() for msg in recent_messages if msg["role"] != "system")
-    return any(word in combined for word in FINANCE_KEYWORDS) or any(word in combined for word in EMOTION_WORDS)
+    return any(word in combined for word in FINANCE_KEYWORDS) or any(word in combined for word in SOFT_EMOTION_WORDS)
 
-def last_assistant_message() -> str:
-    for msg in reversed(st.session_state.messages):
-        if msg["role"] == "assistant":
-            return msg["content"].lower()
-    return ""
+def is_followup_confirmation(text: str) -> bool:
+    cleaned = text.strip().lower()
+    return cleaned in SHORT_CONFIRMATIONS
 
 def is_short_continuation(text: str) -> bool:
     lower = text.strip().lower()
     if lower in SHORT_CONFIRMATIONS:
         return True
-    if len(lower.split()) <= 4 and recent_conversation_is_money_related():
+    if len(lower.split()) <= 5 and recent_conversation_is_money_related():
         return True
     return False
 
-def classify_scope(text: str) -> str:
-    lower = text.strip().lower()
+def is_finance_related(text: str) -> bool:
+    lower = text.lower().strip()
 
     if is_simple_greeting(lower):
-        return "greeting"
+        return True
 
-    if any(re.search(pattern, lower) for pattern in OFF_TOPIC_PATTERNS):
-        return "off_topic"
+    if last_assistant_asked_money_redirect() and is_followup_confirmation(lower):
+        return True
 
-    if any(word in lower for word in FINANCE_KEYWORDS):
-        return "finance"
+    if is_short_continuation(lower) and recent_conversation_is_money_related():
+        return True
 
-    if any(word in lower for word in EMOTION_WORDS):
-        if recent_conversation_is_money_related():
-            return "finance"
-        return "unclear_emotional"
+    keyword_hit = any(word in lower for word in FINANCE_KEYWORDS)
+    phrase_hit = any(phrase in lower for phrase in FINANCE_THERAPY_PHRASES)
+    off_topic_hit = any(re.search(pattern, lower) for pattern in OFF_TOPIC_PATTERNS)
 
-    if is_short_continuation(lower):
-        return "finance"
+    if keyword_hit or phrase_hit:
+        return True
 
-    if recent_conversation_is_money_related() and len(lower.split()) <= 12:
-        return "finance"
+    if off_topic_hit:
+        return False
 
-    return "unclear"
+    if any(word in lower for word in SOFT_EMOTION_WORDS) and recent_conversation_is_money_related():
+        return True
 
-def soft_redirect_response(user_text: str) -> str:
+    return False
+
+def off_topic_response(user_text: str) -> str:
     lower = user_text.lower().strip()
 
-    if any(word in lower for word in EMOTION_WORDS):
+    if any(word in lower for word in SOFT_EMOTION_WORDS):
         return (
-            "I may not be the best for that exact topic, but if this connects to money stress, spending, "
-            "or feeling overwhelmed financially, I’m here with you. What’s been going on?"
+            "I might not be the best for that exact topic, but if this connects to money stress, "
+            "spending, or financial pressure, I’m here with you. What’s been going on?"
         )
 
     return (
-        "I might not be the best for that exact topic, but if it connects back to money, budgeting, "
-        "spending, debt, or financial stress, I’d love to help. What part feels most tied to money?"
+        "I might not be the best for that exact topic, but if this ties into money, budgeting, "
+        "spending, debt, or financial stress, I’d be glad to help. What part feels most connected to money?"
     )
 
 def expand_short_followup(prompt: str) -> str:
     lower = prompt.strip().lower()
-    last_assistant = last_assistant_message()
 
-    if lower in SHORT_CONFIRMATIONS:
-        if "budget" in last_assistant:
-            return (
-                "The user agreed to continue with the budget conversation. "
-                "Respond naturally and warmly. "
-                "Do not redirect. "
-                "Move forward with one simple budgeting step."
-            )
+    if last_assistant_asked_money_redirect() and is_followup_confirmation(lower):
         return (
-            "The user gave a short confirmation in an ongoing money-related conversation. "
-            "Respond naturally, continue the thread, and do not restart the conversation."
+            "The user confirmed that this does relate to money. "
+            "Respond warmly and naturally. "
+            "Do not repeat the redirect. "
+            "Ask one gentle, specific follow-up question to help them open up about what is going on financially."
+        )
+
+    if lower in {"no", "not really", "nope"} and last_assistant_asked_money_redirect():
+        return (
+            "The user said this is not about money. "
+            "Briefly and kindly explain that you can only help with financial therapy and money-related support."
+        )
+
+    if is_short_continuation(lower) and recent_conversation_is_money_related():
+        return (
+            "The user gave a short continuation in an ongoing money-related conversation. "
+            "Respond naturally and continue the thread without restarting it."
         )
 
     return prompt
 
-# ---------------- BUDGET HELPERS ----------------
+def user_is_still_distressed(text: str) -> bool:
+    lower = text.lower().strip()
+    distress_patterns = [
+        "still stressed",
+        "still anxious",
+        "still overwhelmed",
+        "still worried",
+        "but i'm still",
+        "but im still",
+        "i'm still stressed",
+        "im still stressed",
+        "i'm still anxious",
+        "im still anxious",
+        "still really stressed",
+        "still feel stressed",
+        "still feel anxious"
+    ]
+    return any(p in lower for p in distress_patterns)
+
+# ---------------- HELPERS ----------------
 def budget_summary_values(budget_data: dict):
     total = (
         budget_data["rent"]
@@ -464,8 +551,7 @@ def build_budget_context(budget_data: dict) -> str:
         return (
             "\n\nUser budget context:\n"
             "- No budget data has been entered yet.\n"
-            "- Do not assume emotional meaning from that.\n"
-            "- Mention this only if helpful."
+            "Do not infer emotional meaning from this. Mention it only if relevant."
         )
 
     return (
@@ -480,7 +566,7 @@ def build_budget_context(budget_data: dict) -> str:
         f"- Other: ${budget_data['other']}\n"
         f"- Total planned monthly outflow: ${total_spending}\n"
         f"- Remaining amount: ${remaining_amount}\n"
-        "- Use this lightly and only when relevant."
+        "Use this only when relevant."
     )
 
 def get_reflection_text(remaining: int | float) -> str:
@@ -494,29 +580,59 @@ def get_reflection_text(remaining: int | float) -> str:
 
 def get_idle_followup() -> str:
     options = [
-        "No rush — we can keep this really simple and just start with income and essentials.",
-        "Take your time. We can do this one small step at a time.",
-        "No pressure. Want to start with just your monthly income and main bills?",
-        "We can make this easy together — income first, then essentials, then everything else."
+        "No rush — would it help if we kept it really simple and just started with income and essentials?",
+        "Take your time. We can break this into one small step if that feels easier.",
+        "You do not need to figure it all out at once. Want to start with just a basic monthly budget?",
+        "If it helps, we can make this super simple together — income, bills, savings, then spending."
     ]
     return random.choice(options)
 
-# ---------------- MEMORY ----------------
+def build_recent_flow_context() -> str:
+    recent = st.session_state.messages[-4:]
+    visible = [m for m in recent if m["role"] != "system"]
+
+    if not visible:
+        return "\n\nRecent flow context:\n- No prior conversation yet."
+
+    formatted = []
+    for msg in visible:
+        role = "User" if msg["role"] == "user" else "Assistant"
+        formatted.append(f"- {role}: {msg['content']}")
+
+    return (
+        "\n\nRecent flow context:\n"
+        + "\n".join(formatted)
+        + "\nUse this to continue the emotional and conversational thread naturally."
+        + "\nPay close attention to how the user is responding to the assistant’s last suggestion."
+        + "\nIf the user is hesitant, overwhelmed, or says the suggestion does not solve the feeling, do not just offer another generic step."
+    )
+
+# ---------------- RESPONSE STRUCTURE + MEMORY ----------------
 def classify_response_mode(text: str) -> str:
     lower = text.lower().strip()
 
     if is_simple_greeting(lower):
         return "greeting"
 
-    if any(word in lower for word in EMOTION_WORDS):
+    emotional_words = [
+        "anxious", "anxiety", "guilty", "ashamed", "overwhelmed", "stress",
+        "stressed", "avoid", "avoiding", "scared", "afraid", "regret",
+        "panic", "bad with money", "embarrassed", "impulse", "overspend"
+    ]
+    planning_words = [
+        "budget", "plan", "help me create", "help me build", "monthly budget",
+        "set up", "organize", "breakdown", "categories", "how much should"
+    ]
+    direct_question_words = [
+        "how do i", "what should i", "can you help", "what is", "why do i"
+    ]
+
+    if any(word in lower for word in emotional_words):
         return "reflective"
-
-    if any(word in lower for word in ["budget", "plan", "organize", "breakdown", "how much should"]):
+    if any(word in lower for word in planning_words):
         return "planning"
-
-    if any(phrase in lower for phrase in ["how do i", "what should i", "can you help", "why do i"]):
+    if any(word in lower for word in direct_question_words):
         return "direct"
-
     if len(lower.split()) <= 6:
         return "gentle_followup"
 
@@ -595,8 +711,8 @@ def build_memory_context() -> str:
         f"- Recent concern: {memory['recent_concern'] or 'None yet'}\n"
         f"- Known spending trigger: {memory['spending_trigger'] or 'None noted'}\n"
         f"- Current goal: {memory['goal'] or 'Not yet clear'}\n"
-        "- Use this lightly for continuity.\n"
-        "- Do not sound repetitive."
+        "Use this lightly to keep continuity. "
+        "Only reference earlier details when it feels natural and helpful."
     )
 
 def build_response_structure_instruction(prompt: str) -> str:
@@ -606,48 +722,52 @@ def build_response_structure_instruction(prompt: str) -> str:
         return (
             "\n\nResponse structure:\n"
             "- Respond briefly and warmly.\n"
-            "- Do not jump into advice.\n"
-            "- Invite them in naturally."
+            "- Do not give advice yet.\n"
+            "- Do not analyze emotions or patterns."
         )
 
     if mode == "reflective":
         return (
             "\n\nResponse structure:\n"
             "- Start with a short human acknowledgment.\n"
-            "- Briefly reflect the money feeling.\n"
-            "- Offer one small next step or ask one gentle question.\n"
-            "- Keep it grounded."
+            "- Respond directly to the user's most recent emotional shift or reaction.\n"
+            "- If they are reacting to a prior suggestion, address that reaction before offering anything new.\n"
+            "- Do not repeat the same type of advice in slightly different wording.\n"
+            "- Only offer a next step if it feels earned."
         )
 
     if mode == "planning":
         return (
             "\n\nResponse structure:\n"
-            "- Be warm and practical.\n"
-            "- Give one simple step first.\n"
-            "- End with one small question."
+            "- Start warm but concise.\n"
+            "- Give a simple practical step or framework.\n"
+            "- End with one small question to tailor the next response.\n"
+            "- Keep it clear and not too long."
         )
 
     if mode == "direct":
         return (
             "\n\nResponse structure:\n"
-            "- Answer the money question directly.\n"
-            "- Keep the tone soft and human.\n"
-            "- Add one useful practical suggestion."
+            "- Answer the finance question directly.\n"
+            "- Keep the tone warm and human.\n"
+            "- Add one small practical suggestion if useful.\n"
+            "- Avoid over-reflecting."
         )
 
     if mode == "gentle_followup":
         return (
             "\n\nResponse structure:\n"
-            "- Continue the conversation naturally.\n"
+            "- Be supportive and simple.\n"
+            "- Continue the thread naturally.\n"
             "- Do not restart the topic.\n"
-            "- Keep it short and warm."
+            "- Ask one clarifying question only if needed."
         )
 
     return (
         "\n\nResponse structure:\n"
-        "- Be conversational.\n"
-        "- Use a brief acknowledgment, brief guidance, then one next step.\n"
-        "- Avoid sounding robotic."
+        "- Be conversational and steady.\n"
+        "- Use brief acknowledgment, brief guidance, then one small next step.\n"
+        "- Do not turn the reply into a lecture."
     )
 
 # ---------------- SIDEBAR ----------------
@@ -774,7 +894,7 @@ if st.session_state.selected_prompt:
 elif typed_prompt:
     prompt = typed_prompt
 
-# ---------------- RESPONSE ENGINE ----------------
+# ---------------- RESPONSE LOGIC ----------------
 if prompt:
     st.session_state.last_user_time = time.time()
 
@@ -783,89 +903,84 @@ if prompt:
 
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    scope = classify_scope(prompt)
     prompt_for_model = expand_short_followup(prompt)
 
-    if scope == "off_topic":
-        blocked_response = soft_redirect_response(prompt)
+    if not is_finance_related(prompt):
+        blocked_response = off_topic_response(prompt)
 
         with st.chat_message("assistant"):
             st.markdown(blocked_response)
 
-        st.session_state.messages.append({"role": "assistant", "content": blocked_response})
-        st.session_state.last_assistant_time = time.time()
-        st.stop()
-
-    if scope == "unclear":
-        gentle_response = (
-            "I’m here for money-related support, budgeting, spending, and financial stress. "
-            "What’s been feeling hardest for you financially lately?"
+        st.session_state.messages.append(
+            {"role": "assistant", "content": blocked_response}
         )
-
-        with st.chat_message("assistant"):
-            st.markdown(gentle_response)
-
-        st.session_state.messages.append({"role": "assistant", "content": gentle_response})
         st.session_state.last_assistant_time = time.time()
         st.stop()
 
     update_memory_from_user_input(prompt)
 
     budget_context = build_budget_context(st.session_state.user_budget)
+    recent_flow_context = build_recent_flow_context()
+
     emotion_context = (
         "\n\nUser emotional context:\n"
         f"- Current money mood: {st.session_state.money_mood}\n"
         f"- Reflection note: {st.session_state.reflection_note if st.session_state.reflection_note.strip() else 'No reflection provided.'}\n"
-        "- Use this only when genuinely relevant."
+        "Use this only when the user's message is actually about money stress, guilt, avoidance, overspending, or emotional difficulty."
     )
+
     memory_context = build_memory_context()
     structure_instruction = build_response_structure_instruction(prompt)
 
-    if scope == "greeting":
-        enriched_prompt = (
-            f"{prompt_for_model}\n\n"
-            "The user is greeting you. "
-            "Respond warmly and naturally. "
-            "Do not jump into analysis or advice. "
-            "A light invitation to share what is going on with money is enough."
-            f"{memory_context}"
-            f"{structure_instruction}"
+    extra_flow_instruction = ""
+    if user_is_still_distressed(prompt):
+        extra_flow_instruction = (
+            "\n\nSpecial flow instruction:\n"
+            "- The user is saying the previous step does not fully reduce the stress.\n"
+            "- Do not simply give another generic budgeting task.\n"
+            "- First acknowledge that doing the task and still feeling stressed can both be true.\n"
+            "- Stay with that tension for a moment.\n"
+            "- Then offer one gentler next step only if it fits."
         )
-    elif scope == "unclear_emotional":
+
+    if is_simple_greeting(prompt):
         enriched_prompt = (
             f"{prompt_for_model}\n\n"
-            "The user sounds emotional, but the money connection is not fully explicit yet. "
-            "Respond warmly and gently. "
-            "Do not shut them down. "
-            "Briefly acknowledge the feeling and softly ask whether this has been coming up around money, spending, or financial stress."
+            "The user is only greeting you. Respond warmly, naturally, and briefly. "
+            "Do not provide financial advice or emotional analysis unless they ask for money help."
             f"{memory_context}"
             f"{structure_instruction}"
         )
     else:
         enriched_prompt = (
             f"{prompt_for_model}\n\n"
-            "Stay focused on financial topics, but allow natural conversation flow. "
-            "If the user is continuing a money-related conversation, respond naturally without redirecting. "
-            "If the user expresses money anxiety, guilt, shame, avoidance, or stress, acknowledge it briefly in plain human language. "
-            "If they want practical help, give one clear step first instead of too much at once. "
-            "Keep the response concise to medium length. "
-            "Ask at most one follow-up question. "
-            "Do not sound robotic or overly scripted."
+            "Only respond if the user's message is related to finance, money behavior, budgeting, spending, saving, debt, bills, or financial stress. "
+            "If the message is vague and emotional, gently connect it back to money instead of answering unrelated topics. "
+            "Respond naturally and conversationally. "
+            "Keep the response fairly short to medium length. "
+            "Only use a financial therapy style if the user is actually expressing a money problem, emotional stress, guilt, anxiety, avoidance, or overspending pattern. "
+            "If the user is asking a straightforward budgeting or financial planning question, be warm but direct. "
+            "Do not overanalyze neutral messages. "
+            "If useful, include one small next step. "
+            "Ask at most one follow-up question."
             f"{budget_context}"
             f"{emotion_context}"
             f"{memory_context}"
+            f"{recent_flow_context}"
+            f"{extra_flow_instruction}"
             f"{structure_instruction}"
         )
 
+    # IMPORTANT: keep the real user message intact and add instructions separately
     temp_messages = st.session_state.messages.copy()
-    temp_messages[-1] = {"role": "user", "content": enriched_prompt}
+    temp_messages.append({"role": "system", "content": enriched_prompt})
 
     with st.chat_message("assistant"):
         try:
             stream = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=temp_messages,
-                temperature=0.7,
+                temperature=0.55,
                 stream=True
             )
 
