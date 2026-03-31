@@ -647,8 +647,9 @@ def off_topic_response(user_text: str) -> str:
 
     return (
         "I’m here specifically for money, budgeting, spending habits, debt, and financial stress. "
-        "If you want, tell me what’s happening financially and I’ll help you work through it."
+        "Tell me what’s happening financially and I’ll help you work through it."
     )
+
 # ---------------- HELPERS ----------------
 def budget_summary_values(budget_data: dict):
     total = (
@@ -736,6 +737,59 @@ def build_recent_flow_context() -> str:
         + "\nPay close attention to how the user is responding to the assistant’s last suggestion."
         + "\nIf the user is hesitant, overwhelmed, or says the suggestion does not solve the feeling, do not just offer another generic step."
     )
+
+def user_is_still_distressed(text: str) -> bool:
+    lower = text.lower().strip()
+    distress_patterns = [
+        "still stressed",
+        "still anxious",
+        "still overwhelmed",
+        "still worried",
+        "but i'm still",
+        "but im still",
+        "i'm still stressed",
+        "im still stressed",
+        "i'm still anxious",
+        "im still anxious",
+        "still really stressed",
+        "still feel stressed",
+        "still feel anxious"
+    ]
+    return any(pattern in lower for pattern in distress_patterns)
+
+def expand_short_followup(prompt: str) -> str:
+    lower = prompt.strip().lower()
+
+    if last_assistant_asked_money_redirect() and is_followup_confirmation(lower):
+        return (
+            "The user confirmed that this does relate to money. "
+            "Respond warmly and naturally. "
+            "Do not repeat the redirect. "
+            "Ask one gentle, specific follow-up question to help them open up about what is going on financially."
+        )
+
+    if lower in {"no", "not really", "nope"} and last_assistant_asked_money_redirect():
+        return (
+            "The user said this is not about money. "
+            "Briefly and kindly explain that you can only help with financial therapy and money-related support."
+        )
+
+    if is_contextual_followup(lower):
+        return (
+            "The user is responding to the assistant’s previous money-related suggestions. "
+            "Continue that exact thread naturally. "
+            "Acknowledge which parts resonated and build from there. "
+            "Do not act like this is a new topic. "
+            "Do not redirect them back to money because the conversation is already about money."
+        )
+
+    if is_short_continuation(lower) and recent_conversation_is_money_related():
+        return (
+            "The user gave a short continuation in an ongoing money-related conversation. "
+            "Respond naturally and continue the thread without restarting it."
+        )
+
+    return prompt
 
 # ---------------- RESPONSE STRUCTURE + MEMORY ----------------
 def classify_response_mode(text: str) -> str:
@@ -1024,39 +1078,6 @@ if st.session_state.selected_prompt:
 elif typed_prompt:
     prompt = typed_prompt
 
-def expand_short_followup(prompt: str) -> str:
-    lower = prompt.strip().lower()
-
-    if last_assistant_asked_money_redirect() and is_followup_confirmation(lower):
-        return (
-            "The user confirmed that this does relate to money. "
-            "Respond warmly and naturally. "
-            "Do not repeat the redirect. "
-            "Ask one gentle, specific follow-up question to help them open up about what is going on financially."
-        )
-
-    if lower in {"no", "not really", "nope"} and last_assistant_asked_money_redirect():
-        return (
-            "The user said this is not about money. "
-            "Briefly and kindly explain that you can only help with financial therapy and money-related support."
-        )
-
-    if is_contextual_followup(lower):
-        return (
-            "The user is responding to the assistant’s previous money-related suggestions. "
-            "Continue that exact thread naturally. "
-            "Acknowledge which parts resonated and build from there. "
-            "Do not act like this is a new topic. "
-            "Do not redirect them back to money because the conversation is already about money."
-        )
-
-    if is_short_continuation(lower) and recent_conversation_is_money_related():
-        return (
-            "The user gave a short continuation in an ongoing money-related conversation. "
-            "Respond naturally and continue the thread without restarting it."
-        )
-
-    return prompt
 # ---------------- RESPONSE LOGIC ----------------
 if prompt:
     st.session_state.last_user_time = time.time()
