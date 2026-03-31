@@ -1,9 +1,14 @@
 import time
 import random
 import re
+import os
+import glob
+import numpy as np
 import streamlit as st
 from openai import OpenAI
 from streamlit_autorefresh import st_autorefresh
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -211,6 +216,109 @@ st.markdown(
 # ---------------- OPENAI CLIENT ----------------
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
+# ---------------- BGE / KNOWLEDGE RETRIEVAL ----------------
+def chunk_text(text, chunk_size=500, overlap=100):
+    text = text.strip()
+    if not text:
+        return []
+
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunks.append(text[start:end])
+        start += chunk_size - overlap
+    return chunks
+
+@st.cache_resource
+def load_embedding_model():
+    local_model_path = "models/bge-small-en-v1.5"
+    if os.path.exists(local_model_path):
+        return SentenceTransformer(local_model_path)
+    return SentenceTransformer("BAAI/bge-small-en-v1.5")
+
+@st.cache_data
+def load_knowledge_base():
+    knowledge_chunks = []
+    file_paths = glob.glob("data/*.txt") + glob.glob("data/*.md")
+
+    for path in file_paths:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            chunks = chunk_text(content)
+            for chunk in chunks:
+                knowledge_chunks.append({
+                    "source": os.path.basename(path),
+                    "text": chunk
+                })
+        except Exception as e:
+            print(f"Error reading {path}: {e}")
+
+    return knowledge_chunks
+
+@st.cache_data
+def build_knowledge_index():
+    knowledge_chunks = load_knowledge_base()
+
+    if not knowledge_chunks:
+        return [], None
+
+    model = load_embedding_model()
+    texts = [item["text"] for item in knowledge_chunks]
+    embeddings = model.encode(
+        texts,
+        convert_to_numpy=True,
+        normalize_embeddings=True
+    )
+    return knowledge_chunks, embeddings
+
+def retrieve_relevant_context(user_query, top_k=3, similarity_threshold=0.42):
+    knowledge_chunks, embeddings = build_knowledge_index()
+
+    if not knowledge_chunks or embeddings is None:
+        return []
+
+    model = load_embedding_model()
+    query_embedding = model.encode(
+        [user_query],
+        convert_to_numpy=True,
+        normalize_embeddings=True
+    )
+
+    scores = cosine_similarity(query_embedding, embeddings)[0]
+    ranked_indices = np.argsort(scores)[::-1]
+
+    results = []
+    for idx in ranked_indices[:top_k]:
+        if scores[idx] >= similarity_threshold:
+            results.append({
+                "source": knowledge_chunks[idx]["source"],
+                "text": knowledge_chunks[idx]["text"],
+                "score": float(scores[idx])
+            })
+
+    return results
+
+def build_knowledge_context(user_query: str) -> str:
+    retrieved = retrieve_relevant_context(user_query)
+
+    if not retrieved:
+        return (
+            "\n\nRetrieved knowledge context:\n"
+            "- No relevant knowledge snippets found."
+        )
+
+    lines = ["\n\nRetrieved knowledge context:"]
+    for item in retrieved:
+        lines.append(f"- Source: {item['source']}")
+        lines.append(f"  Content: {item['text']}")
+    lines.append(
+        "Use this only if it genuinely helps the response feel more grounded and relevant."
+    )
+    return "\n".join(lines)
+
 # ---------------- SYSTEM PROMPT ----------------
 THERAPY_SYSTEM_PROMPT = """
 You are WealthWell, a financial therapy bot.
@@ -275,6 +383,7 @@ Behavior rules:
 - in each reply, anchor to the user's most recent message
 - if the user is reacting to a prior suggestion, address that reaction before offering anything new
 - do not repeat the same advice with slightly different wording
+- if helpful knowledge context is provided, use it naturally without sounding like a search engine
 """
 
 # ---------------- SESSION STATE ----------------
@@ -921,6 +1030,9 @@ if prompt:
 
     budget_context = build_budget_context(st.session_state.user_budget)
     recent_flow_context = build_recent_flow_context()
+    memory_context = build_memory_context()
+    structure_instruction = build_response_structure_instruction(prompt)
+    knowledge_context = build_knowledge_context(prompt)
 
     emotion_context = (
         "\n\nUser emotional context:\n"
@@ -928,9 +1040,6 @@ if prompt:
         f"- Reflection note: {st.session_state.reflection_note if st.session_state.reflection_note.strip() else 'No reflection provided.'}\n"
         "Use this only when the user's message is actually about money stress, guilt, avoidance, overspending, or emotional difficulty."
     )
-
-    memory_context = build_memory_context()
-    structure_instruction = build_response_structure_instruction(prompt)
 
     extra_flow_instruction = ""
     if user_is_still_distressed(prompt):
@@ -967,11 +1076,11 @@ if prompt:
             f"{emotion_context}"
             f"{memory_context}"
             f"{recent_flow_context}"
+            f"{knowledge_context}"
             f"{extra_flow_instruction}"
             f"{structure_instruction}"
         )
 
-    # IMPORTANT: keep the real user message intact and add instructions separately
     temp_messages = st.session_state.messages.copy()
     temp_messages.append({"role": "system", "content": enriched_prompt})
 
